@@ -216,6 +216,11 @@ impl Request {
         &self.method
     }
 
+    /// The request parameters.
+    pub fn params(&self) -> &Option<Value> {
+        &self.params
+    }
+
     /// Determine if the given name matches the request method.
     pub fn matches(&self, name: &str) -> bool {
         name == &self.method
@@ -241,21 +246,7 @@ impl Request {
             })
         }
     }
-}
 
-fn map_json_error(e: serde_json::Error) -> Error {
-    if e.is_data() {
-        Error::InvalidRequest {
-            data: e.to_string(),
-        }
-    } else {
-        Error::Parse {
-            data: e.to_string(),
-        }
-    }
-}
-
-impl Request {
     /// Create a new request.
     pub fn new(method: &str, params: Option<Value>) -> Self {
         Self {
@@ -276,6 +267,18 @@ impl Request {
     /// Parse a JSON payload from a `Value`.
     pub fn from_value(payload: Value) -> Result<Self> {
         Ok(serde_json::from_value::<Request>(payload).map_err(map_json_error)?)
+    }
+}
+
+fn map_json_error(e: serde_json::Error) -> Error {
+    if e.is_data() {
+        Error::InvalidRequest {
+            data: e.to_string(),
+        }
+    } else {
+        Error::Parse {
+            data: e.to_string(),
+        }
     }
 }
 
