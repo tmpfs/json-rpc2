@@ -161,13 +161,16 @@ impl Into<Response> for Error {
 }
 
 /// Error information for response messages.
-#[doc(hidden)]
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct RpcError {
-    code: isize,
-    message: String,
+    /// The error code.
+    pub code: isize,
+    /// The error message.
+    pub message: String,
+    /// Additional data for the error, typically an underlying 
+    /// cause for the error.
     #[serde(skip_serializing_if = "Option::is_none")]
-    data: Option<String>,
+    pub data: Option<String>,
 }
 
 /// Trait for services that maybe handle a request.
