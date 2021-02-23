@@ -108,10 +108,8 @@ pub enum Error {
 impl Error {
     /// Helper function to `Box` an error implementation.
     ///
-    /// Useful in service handlers that need to use the `?` operator
-    /// to propagate foreign errors via the service broker.
-    ///
-    /// Call `map_err` with `Error::boxed` and append with the `?` operator.
+    /// Service handlers can call `map_err(Error::boxed)?` to propagate 
+    /// foreign errors.
     pub fn boxed(e: impl std::error::Error + Send + 'static) -> Self {
         let err: Box<dyn std::error::Error + Send> = Box::new(e);
         Error::from(err)
