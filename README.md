@@ -2,7 +2,7 @@
 
 A simple, pragmatic implementation of [JSONRPC-2.0][] for [Rust][] that is transport agnostic and adheres strictly to the [specification][].
 
-Futures support is available using the `async` feature flag which uses [async-trait][] in the `futures` module, see the `async` example for usage:
+Nonblocking support is available using the `async` feature flag which requires [async-trait][], see the `async` example for usage:
 
 ```
 cargo run --example hello-world
