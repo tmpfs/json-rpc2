@@ -27,13 +27,16 @@
 //!        Ok(response) => response,
 //!        Err(e) => e.into(),
 //!    };
-//!    println!("{:?}", response.result());
 //!    assert_eq!(
 //!        Some(Value::String("Hello, world!".to_string())),
 //!        response.into_result());
 //!    Ok(())
 //! }
 //! ```
+//!
+//! When converting from incoming payloads use the `from_*` functions 
+//! to convert JSON to a [Request](Request) so that errors are mapped correctly.
+//!
 
 use rand::Rng;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -195,6 +198,30 @@ impl Broker {
     }
 }
 
+/// Parse a JSON payload from a string slice into a request.
+pub fn from_str(payload: &str) -> Result<Request> {
+    Ok(serde_json::from_str::<Request>(payload)
+        .map_err(map_json_error)?)
+}
+
+/// Parse a JSON payload from a `Value` into a request.
+pub fn from_value(payload: Value) -> Result<Request> {
+    Ok(serde_json::from_value::<Request>(payload)
+        .map_err(map_json_error)?)
+}
+
+/// Parse a JSON payload from a byte slice into a request.
+pub fn from_slice<'a>(payload: &'a [u8]) -> Result<Request> {
+    Ok(serde_json::from_slice::<Request>(payload)
+        .map_err(map_json_error)?)
+}
+
+/// Parse a JSON payload from an IO reader into a request.
+pub fn from_reader<R: std::io::Read>(payload: R) -> Result<Request> {
+    Ok(serde_json::from_reader::<R, Request>(payload)
+        .map_err(map_json_error)?)
+}
+
 /// JSON-RPC request.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Request {
@@ -216,26 +243,6 @@ impl Request {
                 rand::thread_rng().gen_range(0..std::u32::MAX) + 1,
             )),
         }
-    }
-
-    /// Parse a JSON payload from a string slice.
-    pub fn from_str(payload: &str) -> Result<Self> {
-        Ok(serde_json::from_str::<Request>(payload).map_err(map_json_error)?)
-    }
-
-    /// Parse a JSON payload from a `Value`.
-    pub fn from_value(payload: Value) -> Result<Self> {
-        Ok(serde_json::from_value::<Request>(payload).map_err(map_json_error)?)
-    }
-
-    /// Parse a JSON payload from a byte slice.
-    pub fn from_slice<'a>(payload: &'a [u8]) -> Result<Self> {
-        Ok(serde_json::from_slice::<Request>(payload).map_err(map_json_error)?)
-    }
-
-    /// Parse a JSON payload from an IO reader.
-    pub fn from_reader<R: std::io::Read>(payload: R) -> Result<Self> {
-        Ok(serde_json::from_reader::<R, Request>(payload).map_err(map_json_error)?)
     }
 
     /// The id for the request.
@@ -402,7 +409,7 @@ mod test {
     #[test]
     fn jsonrpc_invalid_request_error() -> Result<()> {
         let bad_json = "{}";
-        let response: Response = match Request::from_str(bad_json) {
+        let response: Response = match from_str(bad_json) {
             Ok(mut request) => (&mut request).into(),
             Err(e) => e.into(),
         };
@@ -480,7 +487,7 @@ mod test {
     #[test]
     fn jsonrpc_parse_error() -> Result<()> {
         let bad_json = r#"{"jsonrpc": "oops}"#;
-        let response: Response = match Request::from_str(bad_json) {
+        let response: Response = match from_str(bad_json) {
             Ok(mut request) => (&mut request).into(),
             Err(e) => e.into(),
         };
