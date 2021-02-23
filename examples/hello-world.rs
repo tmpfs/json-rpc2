@@ -6,7 +6,7 @@ impl Service for ServiceHandler {
     fn handle(&self, req: &mut Request) -> Result<Option<Response>> {
         let mut response = None;
         if req.matches("hello") {
-            let params: String = req.into_params()?;
+            let params: String = req.deserialize()?;
             let message = format!("Hello, {}!", params);
             response = Some((req, Value::String(message)).into());
         }

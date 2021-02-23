@@ -10,7 +10,7 @@
 //!    fn handle(&self, req: &mut Request) -> Result<Option<Response>> {
 //!        let mut response = None;
 //!        if req.matches("hello") {
-//!            let params: String = req.into_params()?;
+//!            let params: String = req.deserialize()?;
 //!            let message = format!("Hello, {}!", params);
 //!            response = Some((req, Value::String(message)).into());
 //!        }
@@ -157,7 +157,7 @@ pub struct RpcError {
     data: Option<String>,
 }
 
-/// Trait for service handlers that maybe handle a request.
+/// Trait for services that maybe handle a request.
 pub trait Service {
     /// Service implementations are invoked with a request
     /// and should reply with a response if the method name
@@ -268,12 +268,12 @@ impl Request {
         name == &self.method
     }
 
-    /// Deserialize the message parameters into type `T`.
+    /// Deserialize and consume the message parameters into type `T`.
     ///
     /// If this request message has no parameters or the `params`
     /// payload cannot be converted to `T` this will return 
     /// `Error::InvalidParams`.
-    pub fn into_params<T: DeserializeOwned>(&mut self) -> Result<T> {
+    pub fn deserialize<T: DeserializeOwned>(&mut self) -> Result<T> {
         if let Some(params) = self.params.take() {
             Ok(
                 serde_json::from_value::<T>(params).map_err(|e| Error::InvalidParams {
@@ -379,7 +379,7 @@ mod test {
         fn handle(&self, req: &mut Request) -> Result<Option<Response>> {
             let mut response = None;
             if req.matches("hello") {
-                let params: String = req.into_params()?;
+                let params: String = req.deserialize()?;
                 let message = format!("Hello, {}!", params);
                 response = Some((req, Value::String(message)).into());
             }
@@ -494,5 +494,4 @@ mod test {
         );
         Ok(())
     }
-
 }
