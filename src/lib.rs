@@ -26,7 +26,7 @@
 //!    let response = serve(&services, &mut request);
 //!    assert_eq!(
 //!        Some(Value::String("Hello, world!".to_string())),
-//!        response.into_result());
+//!        response.into());
 //!    Ok(())
 //! }
 //! ```
@@ -325,18 +325,20 @@ impl Response {
         &self.result
     }
 
-    /// Convert into the result for this response.
-    pub fn into_result(self) -> Option<Value> {
-        self.result
-    }
-
     /// The error for the response.
     pub fn error(&self) -> &Option<RpcError> {
         &self.error
     }
+}
 
-    /// Convert into the error for this response.
-    pub fn into_error(self) -> Option<RpcError> {
+impl Into<Option<Value>> for Response {
+    fn into(self) -> Option<Value> {
+        self.result
+    }
+}
+
+impl Into<Option<RpcError>> for Response {
+    fn into(self) -> Option<RpcError> {
         self.error
     }
 }
@@ -401,7 +403,7 @@ mod test {
         let response = serve(&services, &mut request);
         assert_eq!(
             Some(Value::String("Hello, world!".to_string())),
-            response.into_result()
+            response.into()
         );
         Ok(())
     }
@@ -419,7 +421,7 @@ mod test {
                 message: "Invalid JSON-RPC request".to_string(),
                 data: Some("missing field `jsonrpc` at line 1 column 2".to_string())
             }),
-            response.into_error()
+            response.into()
         );
         Ok(())
     }
@@ -436,7 +438,7 @@ mod test {
                 message: "Service method not found: non-existent".to_string(),
                 data: None
             }),
-            response.into_error()
+            response.into()
         );
         Ok(())
     }
@@ -453,7 +455,7 @@ mod test {
                 message: "Message parameters are invalid".to_string(),
                 data: Some("invalid type: boolean `true`, expected a string".to_string())
             }),
-            response.into_error()
+            response.into()
         );
         Ok(())
     }
@@ -470,7 +472,7 @@ mod test {
                 message: "Mock error".to_string(),
                 data: None
             }),
-            response.into_error()
+            response.into()
         );
         Ok(())
     }
@@ -488,7 +490,7 @@ mod test {
                 message: "Parsing failed, invalid JSON data".to_string(),
                 data: Some("EOF while parsing a string at line 1 column 18".to_string())
             }),
-            response.into_error()
+            response.into()
         );
         Ok(())
     }

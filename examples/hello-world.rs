@@ -22,7 +22,7 @@ fn main() -> Result<()> {
     println!("{:?}", response.result());
     assert_eq!(
         Some(Value::String("Hello, world!".to_string())),
-        response.into_result()
+        response.into()
     );
     Ok(())
 }
