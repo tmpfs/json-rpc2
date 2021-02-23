@@ -161,6 +161,7 @@ impl Into<Response> for Error {
 }
 
 /// Error information for response messages.
+#[doc(hidden)]
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct RpcError {
     code: isize,
