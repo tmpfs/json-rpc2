@@ -1,5 +1,5 @@
 #![deny(missing_docs)]
-//! Simple and pragmatic facade for JSON-RPC2 services that is transport agnostic.
+//! Simple, robust and pragmatic facade for JSON-RPC2 services that is transport agnostic.
 //!
 //! ```
 //! use json_rpc2::*;
@@ -17,7 +17,7 @@
 //!        Ok(response)
 //!    }
 //! }
-//! 
+//!
 //! fn main() -> Result<()> {
 //!    let service: Box<dyn Service> = Box::new(ServiceHandler {});
 //!    let mut request = Request::new(
@@ -40,12 +40,11 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{Number, Value};
 
 const VERSION: &str = "2.0";
-
-const PARSE_ERROR: isize = -32700;
 const INVALID_REQUEST: isize = -32600;
 const METHOD_NOT_FOUND: isize = -32601;
 const INVALID_PARAMS: isize = -32602;
 const INTERNAL_ERROR: isize = -32603;
+const PARSE_ERROR: isize = -32700;
 
 /// Result type for service handler functions and internal library errors.
 pub type Result<T> = std::result::Result<T, Error>;
@@ -57,41 +56,37 @@ pub enum Error {
     #[error("Parsing failed, invalid JSON data")]
     Parse {
         /// The underlying JSON error message.
-        data: String
+        data: String,
     },
-    /// Error generated when the contents of a JSON payload do not 
+    /// Error generated when the contents of a JSON payload do not
     /// match the request type semantics.
     #[error("Invalid JSON-RPC request")]
     InvalidRequest {
         /// The underlying JSON error message.
-        data: String
+        data: String,
     },
 
-    /// Error generated when the request method name did not 
+    /// Error generated when the request method name did not
     /// match any services.
     #[error("Service method not found: {name}")]
     MethodNotFound {
         /// The id of the request message.
         id: Value,
         /// The name of the request method.
-        name: String
+        name: String,
     },
 
-    /// Error generated when request parameters cannot be converted 
+    /// Error generated when request parameters cannot be converted
     /// to the expected type.
     #[error("Message parameters are invalid")]
     InvalidParams {
         /// The id of the request message.
         id: Value,
         /// The underlying JSON error message.
-        data: String
+        data: String,
     },
 
-    /// Generic JSON error.
-    #[error(transparent)]
-    Json(#[from] serde_json::Error),
-
-    /// Generic error type.
+    /// Generic error type converted to an internal error response.
     #[error(transparent)]
     Boxed(#[from] Box<dyn std::error::Error + Send>),
 }
@@ -101,31 +96,34 @@ impl Error {
     ///
     /// Useful in service handlers that need to use the `?` operator
     /// to propagate foreign errors via the service broker.
+    ///
+    /// Call `map_err` with `Error::boxed` and append with the `?` operator.
     pub fn boxed(e: impl std::error::Error + Send + 'static) -> Self {
         let err: Box<dyn std::error::Error + Send> = Box::new(e);
         Error::from(err)
     }
 }
 
+impl<'a> Into<(isize, Option<String>)> for &'a Error {
+    fn into(self) -> (isize, Option<String>) {
+        match self {
+            Error::MethodNotFound { .. } => (METHOD_NOT_FOUND, None),
+            Error::InvalidParams { data, .. } => (INVALID_PARAMS, Some(data.to_string())),
+            Error::Parse { data } => (PARSE_ERROR, Some(data.to_string())),
+            Error::InvalidRequest { data } => (INVALID_REQUEST, Some(data.to_string())),
+            _ => (INTERNAL_ERROR, None),
+        }
+    }
+}
+
 impl<'a> Into<Response> for (&'a mut Request, Error) {
     fn into(self) -> Response {
-        let (code, data): (isize, Option<String>) = match &self.1 {
-            Error::MethodNotFound { .. } => (METHOD_NOT_FOUND, None),
-            Error::InvalidParams { data, .. } => {
-                (INVALID_PARAMS, Some(data.to_string()))
-            }
-            Error::Parse { data } => (PARSE_ERROR, Some(data.to_string())),
-            Error::InvalidRequest { data } => {
-                (INVALID_REQUEST, Some(data.to_string()))
-            }
-            Error::Json(e) => (PARSE_ERROR, Some(e.to_string())),
-            _ => (INTERNAL_ERROR, None),
-        };
+        let (code, data): (isize, Option<String>) = (&self.1).into();
         Response {
             jsonrpc: VERSION.to_string(),
             id: self.0.id.clone(),
             result: None,
-            error: Some(JsonRpcError {
+            error: Some(RpcError {
                 code,
                 message: self.1.to_string(),
                 data,
@@ -136,14 +134,15 @@ impl<'a> Into<Response> for (&'a mut Request, Error) {
 
 impl Into<Response> for Error {
     fn into(self) -> Response {
+        let (code, data): (isize, Option<String>) = (&self).into();
         Response {
             jsonrpc: VERSION.to_string(),
             id: Value::Null,
             result: None,
-            error: Some(JsonRpcError {
-                code: INTERNAL_ERROR,
+            error: Some(RpcError {
+                code,
                 message: self.to_string(),
-                data: None,
+                data,
             }),
         }
     }
@@ -151,7 +150,7 @@ impl Into<Response> for Error {
 
 /// Error information for response messages.
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
-pub struct JsonRpcError {
+pub struct RpcError {
     code: isize,
     message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -160,11 +159,11 @@ pub struct JsonRpcError {
 
 /// Trait for service handlers that maybe handle a request.
 pub trait Service {
-    /// Service implementations are invoked with a request 
-    /// and should reply with a response if the method name 
+    /// Service implementations are invoked with a request
+    /// and should reply with a response if the method name
     /// is one handled by the service.
     ///
-    /// If the method name for the request is not handled by the service 
+    /// If the method name for the request is not handled by the service
     /// if should return `None` so that the broker tries subsequent services.
     fn handle(&self, req: &mut Request) -> Result<Option<Response>>;
 }
@@ -172,10 +171,10 @@ pub trait Service {
 /// Broker calls multiple services and always yields a response.
 pub struct Broker;
 impl Broker {
-    /// Call each of the services in order and return the 
+    /// Call each of the services in order and return the
     /// first response message.
     ///
-    /// If no services match the incoming request this will 
+    /// If no services match the incoming request this will
     /// return a method not found response.
     pub fn handle<'a>(
         services: &'a Vec<&'a Box<dyn Service>>,
@@ -225,15 +224,16 @@ impl Request {
     /// Deserialize the message parameters into type `T`.
     ///
     /// If this request message has no parameters or the `params`
-    /// payload cannot be converted to `T` this will return `INVALID_PARAMS`.
+    /// payload cannot be converted to `T` this will return 
+    /// `Error::InvalidParams`.
     pub fn into_params<T: DeserializeOwned>(&mut self) -> Result<T> {
         if let Some(params) = self.params.take() {
-            Ok(serde_json::from_value::<T>(params).map_err(|e| {
-                Error::InvalidParams {
+            Ok(
+                serde_json::from_value::<T>(params).map_err(|e| Error::InvalidParams {
                     id: self.id.clone(),
                     data: e.to_string(),
-                }
-            })?)
+                })?,
+            )
         } else {
             Err(Error::InvalidParams {
                 id: self.id.clone(),
@@ -244,16 +244,14 @@ impl Request {
 }
 
 fn map_json_error(e: serde_json::Error) -> Error {
-    if e.is_syntax() {
-        Error::Parse {
-            data: e.to_string(),
-        }
-    } else if e.is_data() {
+    if e.is_data() {
         Error::InvalidRequest {
             data: e.to_string(),
         }
     } else {
-        Error::from(e)
+        Error::Parse {
+            data: e.to_string(),
+        }
     }
 }
 
@@ -290,7 +288,7 @@ pub struct Response {
     #[serde(skip_serializing_if = "Option::is_none")]
     result: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    error: Option<JsonRpcError>,
+    error: Option<RpcError>,
 }
 
 impl Response {
@@ -301,7 +299,7 @@ impl Response {
 
     /// The result for the response.
     pub fn result(&self) -> &Option<Value> {
-        &self.result 
+        &self.result
     }
 
     /// Convert into the result for this response.
@@ -310,12 +308,12 @@ impl Response {
     }
 
     /// The error for the response.
-    pub fn error(&self) -> &Option<JsonRpcError> {
+    pub fn error(&self) -> &Option<RpcError> {
         &self.error
     }
 
     /// Convert into the error for this response.
-    pub fn into_error(self) -> Option<JsonRpcError> {
+    pub fn into_error(self) -> Option<RpcError> {
         self.error
     }
 }
@@ -375,8 +373,7 @@ mod test {
     #[test]
     fn jsonrpc_service_ok() -> Result<()> {
         let service: Box<dyn Service> = Box::new(HelloServiceHandler {});
-        let mut request = Request::new(
-            "hello", Some(Value::String("world".to_string())));
+        let mut request = Request::new("hello", Some(Value::String("world".to_string())));
         let services = vec![&service];
         let response = match Broker::handle(&services, &mut request) {
             Ok(response) => response,
@@ -384,7 +381,26 @@ mod test {
         };
         assert_eq!(
             Some(Value::String("Hello, world!".to_string())),
-            response.into_result());
+            response.into_result()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn jsonrpc_invalid_request_error() -> Result<()> {
+        let bad_json = "{}";
+        let response: Response = match Request::from_str(bad_json) {
+            Ok(mut request) => (&mut request).into(),
+            Err(e) => e.into(),
+        };
+        assert_eq!(
+            Some(RpcError {
+                code: -32600,
+                message: "Invalid JSON-RPC request".to_string(),
+                data: Some("missing field `jsonrpc` at line 1 column 2".to_string())
+            }),
+            response.into_error()
+        );
         Ok(())
     }
 
@@ -397,33 +413,73 @@ mod test {
             Ok(response) => response,
             Err(e) => e.into(),
         };
-        eprintln!("{:?}", response.error());
         assert_eq!(
-            Some(JsonRpcError {
+            Some(RpcError {
                 code: -32601,
                 message: "Service method not found: non-existent".to_string(),
-                data: None}),
-            response.into_error());
+                data: None
+            }),
+            response.into_error()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn jsonrpc_invalid_params() -> Result<()> {
+        let service: Box<dyn Service> = Box::new(HelloServiceHandler {});
+        let mut request = Request::new("hello", Some(Value::Bool(true)));
+        let services = vec![&service];
+        let response = match Broker::handle(&services, &mut request) {
+            Ok(response) => response,
+            Err(e) => e.into(),
+        };
+        assert_eq!(
+            Some(RpcError {
+                code: -32602,
+                message: "Message parameters are invalid".to_string(),
+                data: Some("invalid type: boolean `true`, expected a string".to_string())
+            }),
+            response.into_error()
+        );
         Ok(())
     }
 
     #[test]
     fn jsonrpc_internal_error() -> Result<()> {
-        let service: Box<dyn Service> = Box::new(InternalErrorService{});
+        let service: Box<dyn Service> = Box::new(InternalErrorService {});
         let mut request = Request::new("foo", None);
         let services = vec![&service];
         let response = match Broker::handle(&services, &mut request) {
             Ok(response) => response,
             Err(e) => e.into(),
         };
-
         assert_eq!(
-            Some(JsonRpcError {
+            Some(RpcError {
                 code: -32603,
                 message: "Mock error".to_string(),
-                data: None}),
-            response.into_error());
-        
+                data: None
+            }),
+            response.into_error()
+        );
         Ok(())
     }
+
+    #[test]
+    fn jsonrpc_parse_error() -> Result<()> {
+        let bad_json = r#"{"jsonrpc": "oops}"#;
+        let response: Response = match Request::from_str(bad_json) {
+            Ok(mut request) => (&mut request).into(),
+            Err(e) => e.into(),
+        };
+        assert_eq!(
+            Some(RpcError {
+                code: -32700,
+                message: "Parsing failed, invalid JSON data".to_string(),
+                data: Some("EOF while parsing a string at line 1 column 18".to_string())
+            }),
+            response.into_error()
+        );
+        Ok(())
+    }
+
 }

@@ -16,8 +16,7 @@ impl Service for ServiceHandler {
 
 fn main() -> Result<()> {
     let service: Box<dyn Service> = Box::new(ServiceHandler {});
-    let mut request = Request::new(
-        "hello", Some(Value::String("world".to_string())));
+    let mut request = Request::new("hello", Some(Value::String("world".to_string())));
     let services = vec![&service];
     let response = match Broker::handle(&services, &mut request) {
         Ok(response) => response,
@@ -27,6 +26,7 @@ fn main() -> Result<()> {
     println!("{:?}", response.result());
     assert_eq!(
         Some(Value::String("Hello, world!".to_string())),
-        response.into_result());
+        response.into_result()
+    );
     Ok(())
 }
