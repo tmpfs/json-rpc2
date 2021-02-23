@@ -206,6 +206,38 @@ pub struct Request {
 }
 
 impl Request {
+    /// Create a new request.
+    pub fn new(method: &str, params: Option<Value>) -> Self {
+        Self {
+            jsonrpc: VERSION.to_string(),
+            method: method.to_string(),
+            params,
+            id: Value::Number(Number::from(
+                rand::thread_rng().gen_range(0..std::u32::MAX) + 1,
+            )),
+        }
+    }
+
+    /// Parse a JSON payload from a string slice.
+    pub fn from_str(payload: &str) -> Result<Self> {
+        Ok(serde_json::from_str::<Request>(payload).map_err(map_json_error)?)
+    }
+
+    /// Parse a JSON payload from a `Value`.
+    pub fn from_value(payload: Value) -> Result<Self> {
+        Ok(serde_json::from_value::<Request>(payload).map_err(map_json_error)?)
+    }
+
+    /// Parse a JSON payload from a byte slice.
+    pub fn from_slice<'a>(payload: &'a [u8]) -> Result<Self> {
+        Ok(serde_json::from_slice::<Request>(payload).map_err(map_json_error)?)
+    }
+
+    /// Parse a JSON payload from an IO reader.
+    pub fn from_reader<R: std::io::Read>(payload: R) -> Result<Self> {
+        Ok(serde_json::from_reader::<R, Request>(payload).map_err(map_json_error)?)
+    }
+
     /// The id for the request.
     pub fn id(&self) -> &Value {
         &self.id
@@ -245,28 +277,6 @@ impl Request {
                 data: "No parameters given".to_string(),
             })
         }
-    }
-
-    /// Create a new request.
-    pub fn new(method: &str, params: Option<Value>) -> Self {
-        Self {
-            jsonrpc: VERSION.to_string(),
-            method: method.to_string(),
-            params,
-            id: Value::Number(Number::from(
-                rand::thread_rng().gen_range(0..std::u32::MAX) + 1,
-            )),
-        }
-    }
-
-    /// Parse a JSON payload from a string slice.
-    pub fn from_str(payload: &str) -> Result<Self> {
-        Ok(serde_json::from_str::<Request>(payload).map_err(map_json_error)?)
-    }
-
-    /// Parse a JSON payload from a `Value`.
-    pub fn from_value(payload: Value) -> Result<Self> {
-        Ok(serde_json::from_value::<Request>(payload).map_err(map_json_error)?)
     }
 }
 
