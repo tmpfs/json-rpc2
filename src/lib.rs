@@ -176,7 +176,7 @@ pub trait Service {
     /// is one handled by the service.
     ///
     /// If the method name for the request is not handled by the service
-    /// if should return `None` so that the broker tries subsequent services.
+    /// if should return `None`.
     fn handle(&self, req: &mut Request) -> Result<Option<Response>>;
 }
 
