@@ -31,9 +31,23 @@
 //! }
 //! ```
 //!
+//! ## Parsing
+//!
 //! When converting from incoming payloads use the `from_*` functions 
 //! to convert JSON to a [Request](Request) so that errors are mapped correctly.
 //!
+//! ## Async
+//!
+//! For nonblocking support enable the `async` feature and use the `Service` 
+//! trait from the `futures` module. You will also need to depend upon the 
+//! [async-trait](https://docs.rs/async-trait/0.1.42/async_trait/) crate and 
+//! use the `#[async_trait]` attribute macro on your service implementation.
+//!
+//! See the `async` example for usage.
+//!
+
+#[cfg(any(test, feature = "async"))]
+pub mod futures;
 
 use rand::Rng;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
