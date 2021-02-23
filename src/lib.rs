@@ -23,10 +23,7 @@
 //!    let mut request = Request::new(
 //!        "hello", Some(Value::String("world".to_string())));
 //!    let services = vec![&service];
-//!    let response = match Broker::handle(&services, &mut request) {
-//!        Ok(response) => response,
-//!        Err(e) => e.into(),
-//!    };
+//!    let response = serve(&services, &mut request);
 //!    assert_eq!(
 //!        Some(Value::String("Hello, world!".to_string())),
 //!        response.into_result());
@@ -171,30 +168,36 @@ pub trait Service {
     fn handle(&self, req: &mut Request) -> Result<Option<Response>>;
 }
 
-/// Broker calls multiple services and always yields a response.
-pub struct Broker;
-impl Broker {
-    /// Call each of the services in order and return the
-    /// first response message.
-    ///
-    /// If no services match the incoming request this will
-    /// return a method not found response.
-    pub fn handle<'a>(
-        services: &'a Vec<&'a Box<dyn Service>>,
-        req: &mut Request,
-    ) -> Result<Response> {
-        for service in services {
-            if let Some(result) = service.handle(req)? {
-                return Ok(result);
-            }
+/// Call services in order and return the first response message.
+///
+/// If no services match the incoming request this will
+/// return a `Error::MethodNotFound`.
+pub fn handle<'a>(
+    services: &'a Vec<&'a Box<dyn Service>>,
+    request: &mut Request,
+) -> Result<Response> {
+    for service in services {
+        if let Some(result) = service.handle(request)? {
+            return Ok(result);
         }
+    }
 
-        let err = Error::MethodNotFound {
-            name: req.method().to_string(),
-            id: req.id.clone(),
-        };
+    let err = Error::MethodNotFound {
+        name: request.method().to_string(),
+        id: request.id.clone(),
+    };
 
-        Ok((req, err).into())
+    Ok((request, err).into())
+}
+
+/// Infallible service handler, errors are automatically converted to responses.
+pub fn serve<'a>(
+    services: &'a Vec<&'a Box<dyn Service>>,
+    request: &mut Request,
+) -> Response {
+     match handle(services, request) {
+        Ok(response) => response,
+        Err(e) => e.into(),
     }
 }
 
@@ -204,7 +207,7 @@ pub fn from_str(payload: &str) -> Result<Request> {
         .map_err(map_json_error)?)
 }
 
-/// Parse a JSON payload from a `Value` into a request.
+/// Parse a JSON payload from a [Value](serde_json::Value) into a request.
 pub fn from_value(payload: Value) -> Result<Request> {
     Ok(serde_json::from_value::<Request>(payload)
         .map_err(map_json_error)?)
@@ -395,10 +398,7 @@ mod test {
         let service: Box<dyn Service> = Box::new(HelloServiceHandler {});
         let mut request = Request::new("hello", Some(Value::String("world".to_string())));
         let services = vec![&service];
-        let response = match Broker::handle(&services, &mut request) {
-            Ok(response) => response,
-            Err(e) => e.into(),
-        };
+        let response = serve(&services, &mut request);
         assert_eq!(
             Some(Value::String("Hello, world!".to_string())),
             response.into_result()
@@ -429,10 +429,7 @@ mod test {
         let service: Box<dyn Service> = Box::new(HelloServiceHandler {});
         let mut request = Request::new("non-existent", None);
         let services = vec![&service];
-        let response = match Broker::handle(&services, &mut request) {
-            Ok(response) => response,
-            Err(e) => e.into(),
-        };
+        let response = serve(&services, &mut request);
         assert_eq!(
             Some(RpcError {
                 code: -32601,
@@ -449,10 +446,7 @@ mod test {
         let service: Box<dyn Service> = Box::new(HelloServiceHandler {});
         let mut request = Request::new("hello", Some(Value::Bool(true)));
         let services = vec![&service];
-        let response = match Broker::handle(&services, &mut request) {
-            Ok(response) => response,
-            Err(e) => e.into(),
-        };
+        let response = serve(&services, &mut request);
         assert_eq!(
             Some(RpcError {
                 code: -32602,
@@ -469,10 +463,7 @@ mod test {
         let service: Box<dyn Service> = Box::new(InternalErrorService {});
         let mut request = Request::new("foo", None);
         let services = vec![&service];
-        let response = match Broker::handle(&services, &mut request) {
-            Ok(response) => response,
-            Err(e) => e.into(),
-        };
+        let response = serve(&services, &mut request);
         assert_eq!(
             Some(RpcError {
                 code: -32603,

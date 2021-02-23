@@ -18,11 +18,7 @@ fn main() -> Result<()> {
     let service: Box<dyn Service> = Box::new(ServiceHandler {});
     let mut request = Request::new("hello", Some(Value::String("world".to_string())));
     let services = vec![&service];
-    let response = match Broker::handle(&services, &mut request) {
-        Ok(response) => response,
-        Err(e) => e.into(),
-    };
-
+    let response = serve(&services, &mut request);
     println!("{:?}", response.result());
     assert_eq!(
         Some(Value::String("Hello, world!".to_string())),
