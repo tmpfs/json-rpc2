@@ -192,7 +192,7 @@ pub trait Service<T> {
     /// is one handled by the service.
     ///
     /// If the method name for the request is not handled by the service
-    /// if should return `None`.
+    /// it should return `None`.
     fn handle(
         &self,
         request: &mut Request,
@@ -231,6 +231,9 @@ impl<T> From<T> for Context<T> {
 }
 
 /// Serve requests.
+///
+/// Requests are passed to each service in turn and the first service 
+/// that returns a response wins.
 pub struct Server<'a, T> {
     /// Services that the server should invoke for every request.
     services: Vec<&'a Box<dyn Service<T>>>,
@@ -246,7 +249,7 @@ impl<'a, T> Server<'a, T> {
     /// Call services in order and return the first response message.
     ///
     /// If no services match the incoming request this will
-    /// return a `Error::MethodNotFound`.
+    /// return `Error::MethodNotFound`.
     pub(crate) fn handle(
         &self,
         request: &mut Request,

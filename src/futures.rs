@@ -18,6 +18,9 @@ pub trait Service<T: Send + Send> {
 
 /// Serve requests.
 ///
+/// Requests are passed to each service in turn and the first service 
+/// that returns a response wins.
+///
 /// Only available with the `async` feature.
 pub struct Server<'a, T: Send + Sync> {
     /// Services that the server should invoke for every request.
@@ -33,7 +36,7 @@ impl<'a, T: Send + Sync> Server<'a, T> {
     /// Call services in order and return the first response message.
     ///
     /// If no services match the incoming request this will
-    /// return a `Error::MethodNotFound`.
+    /// return `Error::MethodNotFound`.
     pub(crate) async fn handle(
         &self,
         request: &mut Request,
