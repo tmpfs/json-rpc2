@@ -6,20 +6,20 @@
 //! use serde_json::Value;
 //!
 //! struct ServiceHandler;
-//! impl Service for ServiceHandler {
-//!    fn handle(&self, req: &mut Request) -> Result<Option<Response>> {
+//! impl<T> Service<T> for ServiceHandler {
+//!    fn handle(&self, request: &mut Request, context: &Context<T>) -> Result<Option<Response>> {
 //!        let mut response = None;
-//!        if req.matches("hello") {
-//!            let params: String = req.deserialize()?;
+//!        if request.matches("hello") {
+//!            let params: String = request.deserialize()?;
 //!            let message = format!("Hello, {}!", params);
-//!            response = Some((req, Value::String(message)).into());
+//!            response = Some((request, Value::String(message)).into());
 //!        }
 //!        Ok(response)
 //!    }
 //! }
 //!
 //! fn main() -> Result<()> {
-//!    let service: Box<dyn Service> = Box::new(ServiceHandler {});
+//!    let service: Box<dyn Service<()>> = Box::new(ServiceHandler {});
 //!    let mut request = Request::new(
 //!        "hello", Some(Value::String("world".to_string())));
 //!    let services = vec![&service];
@@ -174,44 +174,75 @@ pub struct RpcError {
 }
 
 /// Trait for services that maybe handle a request.
-pub trait Service {
+pub trait Service<T> {
     /// Service implementations are invoked with a request
     /// and should reply with a response if the method name
     /// is one handled by the service.
     ///
     /// If the method name for the request is not handled by the service
     /// if should return `None`.
-    fn handle(&self, req: &mut Request) -> Result<Option<Response>>;
+    fn handle(&self, request: &mut Request, context: &Context<T>) -> Result<Option<Response>>;
 }
 
-/// Call services in order and return the first response message.
-///
-/// If no services match the incoming request this will
-/// return a `Error::MethodNotFound`.
-pub fn handle<'a>(
-    services: &'a Vec<&'a Box<dyn Service>>,
-    request: &mut Request,
-) -> Result<Response> {
-    for service in services {
-        if let Some(result) = service.handle(request)? {
-            return Ok(result);
+/// Context information passed to service handlers that wraps type `T`.
+#[derive(Default)]
+pub struct Context<T> {
+    /// Inner context data.
+    pub data: T,
+}
+
+/// Serve requests.
+pub struct Server<'a, T> {
+    /// Services that the server should invoke for every request.
+    pub services: &'a Vec<&'a Box<dyn Service<T>>>,
+}
+
+impl<'a, T> Server<'a, T> {
+    /// Call services in order and return the first response message.
+    ///
+    /// If no services match the incoming request this will
+    /// return a `Error::MethodNotFound`.
+    pub(crate) fn handle(
+        &self,
+        request: &mut Request,
+        context: &Context<T>,
+    ) -> Result<Response> {
+        for service in self.services {
+            if let Some(result) = service.handle(request, context)? {
+                return Ok(result);
+            }
         }
+
+        let err = Error::MethodNotFound {
+            name: request.method().to_string(),
+            id: request.id.clone(),
+        };
+
+        Ok((request, err).into())
     }
 
-    let err = Error::MethodNotFound {
-        name: request.method().to_string(),
-        id: request.id.clone(),
-    };
-
-    Ok((request, err).into())
+    /// Infallible service handler, errors are automatically converted to responses.
+    pub fn serve(
+        &self,
+        request: &mut Request,
+        context: &Context<T>,
+    ) -> Response {
+        match self.handle(request, context) {
+            Ok(response) => response,
+            Err(e) => e.into(),
+        }
+    }
 }
 
-/// Infallible service handler, errors are automatically converted to responses.
+/// Create a server and call services with a context of `()`.
 pub fn serve<'a>(
-    services: &'a Vec<&'a Box<dyn Service>>,
+    services: &'a Vec<&'a Box<dyn Service<()>>>,
     request: &mut Request,
 ) -> Response {
-     match handle(services, request) {
+    let server = Server { services };
+    //let data = ();
+    let context = Context {data: ()};
+    match server.handle(request, &context) {
         Ok(response) => response,
         Err(e) => e.into(),
     }
@@ -391,21 +422,21 @@ mod test {
     }
 
     struct HelloServiceHandler;
-    impl Service for HelloServiceHandler {
-        fn handle(&self, req: &mut Request) -> Result<Option<Response>> {
+    impl<T> Service<T> for HelloServiceHandler {
+        fn handle(&self, request: &mut Request, _context: &Context<T>) -> Result<Option<Response>> {
             let mut response = None;
-            if req.matches("hello") {
-                let params: String = req.deserialize()?;
+            if request.matches("hello") {
+                let params: String = request.deserialize()?;
                 let message = format!("Hello, {}!", params);
-                response = Some((req, Value::String(message)).into());
+                response = Some((request, Value::String(message)).into());
             }
             Ok(response)
         }
     }
 
     struct InternalErrorService;
-    impl Service for InternalErrorService {
-        fn handle(&self, _req: &mut Request) -> Result<Option<Response>> {
+    impl<T> Service<T> for InternalErrorService {
+        fn handle(&self, _request: &mut Request, _context: &Context<T>) -> Result<Option<Response>> {
             // Must Box the error as it is foreign.
             Err(Error::boxed(MockError::Internal("Mock error".to_string())))
         }
@@ -413,7 +444,7 @@ mod test {
 
     #[test]
     fn jsonrpc_service_ok() -> Result<()> {
-        let service: Box<dyn Service> = Box::new(HelloServiceHandler {});
+        let service: Box<dyn Service<()>> = Box::new(HelloServiceHandler {});
         let mut request = Request::new("hello", Some(Value::String("world".to_string())));
         let services = vec![&service];
         let response = serve(&services, &mut request);
@@ -444,7 +475,7 @@ mod test {
 
     #[test]
     fn jsonrpc_service_method_not_found() -> Result<()> {
-        let service: Box<dyn Service> = Box::new(HelloServiceHandler {});
+        let service: Box<dyn Service<()>> = Box::new(HelloServiceHandler {});
         let mut request = Request::new("non-existent", None);
         let services = vec![&service];
         let response = serve(&services, &mut request);
@@ -461,7 +492,7 @@ mod test {
 
     #[test]
     fn jsonrpc_invalid_params() -> Result<()> {
-        let service: Box<dyn Service> = Box::new(HelloServiceHandler {});
+        let service: Box<dyn Service<()>> = Box::new(HelloServiceHandler {});
         let mut request = Request::new("hello", Some(Value::Bool(true)));
         let services = vec![&service];
         let response = serve(&services, &mut request);
@@ -478,7 +509,7 @@ mod test {
 
     #[test]
     fn jsonrpc_internal_error() -> Result<()> {
-        let service: Box<dyn Service> = Box::new(InternalErrorService {});
+        let service: Box<dyn Service<()>> = Box::new(InternalErrorService {});
         let mut request = Request::new("foo", None);
         let services = vec![&service];
         let response = serve(&services, &mut request);

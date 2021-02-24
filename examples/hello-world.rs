@@ -2,20 +2,20 @@ use json_rpc2::*;
 use serde_json::Value;
 
 struct ServiceHandler;
-impl Service for ServiceHandler {
-    fn handle(&self, req: &mut Request) -> Result<Option<Response>> {
+impl<T> Service<T> for ServiceHandler {
+    fn handle(&self, request: &mut Request, _context: &Context<T>) -> Result<Option<Response>> {
         let mut response = None;
-        if req.matches("hello") {
-            let params: String = req.deserialize()?;
+        if request.matches("hello") {
+            let params: String = request.deserialize()?;
             let message = format!("Hello, {}!", params);
-            response = Some((req, Value::String(message)).into());
+            response = Some((request, Value::String(message)).into());
         }
         Ok(response)
     }
 }
 
 fn main() -> Result<()> {
-    let service: Box<dyn Service> = Box::new(ServiceHandler {});
+    let service: Box<dyn Service<()>> = Box::new(ServiceHandler {});
     let mut request = Request::new("hello", Some(Value::String("world".to_string())));
     let services = vec![&service];
     let response = serve(&services, &mut request);
