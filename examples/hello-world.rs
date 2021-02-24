@@ -3,7 +3,11 @@ use serde_json::Value;
 
 struct ServiceHandler;
 impl<T> Service<T> for ServiceHandler {
-    fn handle(&self, request: &mut Request, _context: &Context<T>) -> Result<Option<Response>> {
+    fn handle(
+        &self,
+        request: &mut Request,
+        _ctx: &Context<T>,
+    ) -> Result<Option<Response>> {
         let mut response = None;
         if request.matches("hello") {
             let params: String = request.deserialize()?;
@@ -16,9 +20,10 @@ impl<T> Service<T> for ServiceHandler {
 
 fn main() -> Result<()> {
     let service: Box<dyn Service<()>> = Box::new(ServiceHandler {});
-    let mut request = Request::new("hello", Some(Value::String("world".to_string())));
-    let services = vec![&service];
-    let response = serve(&services, &mut request);
+    let mut request =
+        Request::new("hello", Some(Value::String("world".to_string())));
+    let server = Server::new(vec![&service]);
+    let response = server.serve(&mut request, &Default::default());
     println!("{:?}", response.result());
     assert_eq!(
         Some(Value::String("Hello, world!".to_string())),

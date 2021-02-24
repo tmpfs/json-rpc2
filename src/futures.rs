@@ -1,43 +1,63 @@
 //! Non-blocking implementation, requires the `async` feature.
 
-use crate::{Request, Response, Error, Result};
+use crate::{Context, Error, Request, Response, Result};
 use async_trait::async_trait;
 
 #[async_trait]
 /// Trait for async services that maybe handle a request.
-pub trait Service {
+pub trait Service<T: Send + Send> {
     /// See [Service](crate::Service) for more information.
-    async fn handle(&self, req: &mut Request) -> Result<Option<Response>>;
+    async fn handle(
+        &self,
+        request: &mut Request,
+        ctx: &Context<T>,
+    ) -> Result<Option<Response>>;
 }
 
-/// Call async services in order and return the first response message.
-///
-/// See [handle](crate::handle) for more information.
-pub async fn handle<'a>(
-    services: &'a Vec<&'a Box<dyn Service>>,
-    request: &mut Request,
-) -> Result<Response> {
-    for service in services {
-        if let Some(result) = service.handle(request).await? {
-            return Ok(result);
-        }
+/// Serve requests.
+pub struct Server<'a, T: Send + Sync> {
+    /// Services that the server should invoke for every request.
+    services: Vec<&'a Box<dyn Service<T>>>,
+}
+
+impl<'a, T: Send + Sync> Server<'a, T> {
+    /// Create a new server.
+    pub fn new(services: Vec<&'a Box<dyn Service<T>>>) -> Self {
+        Self {services} 
     }
 
-    let err = Error::MethodNotFound {
-        name: request.method().to_string(),
-        id: request.id.clone(),
-    };
+    /// Call services in order and return the first response message.
+    ///
+    /// If no services match the incoming request this will
+    /// return a `Error::MethodNotFound`.
+    pub(crate) async fn handle(
+        &self,
+        request: &mut Request,
+        ctx: &Context<T>,
+    ) -> Result<Response> {
+        for service in self.services.iter() {
+            if let Some(result) = service.handle(request, ctx).await? {
+                return Ok(result);
+            }
+        }
 
-    Ok((request, err).into())
-}
+        let err = Error::MethodNotFound {
+            name: request.method().to_string(),
+            id: request.id.clone(),
+        };
 
-/// Infallible async service handler, errors are automatically converted to responses.
-pub async fn serve<'a>(
-    services: &'a Vec<&'a Box<dyn Service>>,
-    request: &mut Request,
-) -> Response {
-     match handle(services, request).await {
-        Ok(response) => response,
-        Err(e) => e.into(),
+        Ok((request, err).into())
+    }
+
+    /// Infallible service handler, errors are automatically converted to responses.
+    pub async fn serve(
+        &self,
+        request: &mut Request,
+        ctx: &Context<T>,
+    ) -> Response {
+        match self.handle(request, ctx).await {
+            Ok(response) => response,
+            Err(e) => e.into(),
+        }
     }
 }

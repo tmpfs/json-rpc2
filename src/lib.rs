@@ -7,7 +7,7 @@
 //!
 //! struct ServiceHandler;
 //! impl<T> Service<T> for ServiceHandler {
-//!    fn handle(&self, request: &mut Request, context: &Context<T>) -> Result<Option<Response>> {
+//!    fn handle(&self, request: &mut Request, _ctx: &Context<T>) -> Result<Option<Response>> {
 //!        let mut response = None;
 //!        if request.matches("hello") {
 //!            let params: String = request.deserialize()?;
@@ -22,8 +22,8 @@
 //!    let service: Box<dyn Service<()>> = Box::new(ServiceHandler {});
 //!    let mut request = Request::new(
 //!        "hello", Some(Value::String("world".to_string())));
-//!    let services = vec![&service];
-//!    let response = serve(&services, &mut request);
+//!    let server = Server::new(vec![&service]);
+//!    let response = server.serve(&mut request, &Default::default());
 //!    assert_eq!(
 //!        Some(Value::String("Hello, world!".to_string())),
 //!        response.into());
@@ -33,14 +33,14 @@
 //!
 //! ## Parsing
 //!
-//! When converting from incoming payloads use the `from_*` functions 
+//! When converting from incoming payloads use the `from_*` functions
 //! to convert JSON to a [Request](Request) so that errors are mapped correctly.
 //!
 //! ## Async
 //!
-//! For nonblocking support enable the `async` feature and use the `Service` 
-//! trait from the `futures` module. You will also need to depend upon the 
-//! [async-trait](https://docs.rs/async-trait/0.1.42/async_trait/) crate and 
+//! For nonblocking support enable the `async` feature and use the `Service`
+//! trait from the `futures` module. You will also need to depend upon the
+//! [async-trait](https://docs.rs/async-trait/0.1.42/async_trait/) crate and
 //! use the `#[async_trait]` attribute macro on your service implementation.
 //!
 //! See the `async` example for usage.
@@ -108,7 +108,7 @@ pub enum Error {
 impl Error {
     /// Helper function to `Box` an error implementation.
     ///
-    /// Service handlers can call `map_err(Error::boxed)?` to propagate 
+    /// Service handlers can call `map_err(Error::boxed)?` to propagate
     /// foreign errors.
     pub fn boxed(e: impl std::error::Error + Send + 'static) -> Self {
         let err: Box<dyn std::error::Error + Send> = Box::new(e);
@@ -120,9 +120,13 @@ impl<'a> Into<(isize, Option<String>)> for &'a Error {
     fn into(self) -> (isize, Option<String>) {
         match self {
             Error::MethodNotFound { .. } => (METHOD_NOT_FOUND, None),
-            Error::InvalidParams { data, .. } => (INVALID_PARAMS, Some(data.to_string())),
+            Error::InvalidParams { data, .. } => {
+                (INVALID_PARAMS, Some(data.to_string()))
+            }
             Error::Parse { data } => (PARSE_ERROR, Some(data.to_string())),
-            Error::InvalidRequest { data } => (INVALID_REQUEST, Some(data.to_string())),
+            Error::InvalidRequest { data } => {
+                (INVALID_REQUEST, Some(data.to_string()))
+            }
             _ => (INTERNAL_ERROR, None),
         }
     }
@@ -167,7 +171,7 @@ pub struct RpcError {
     pub code: isize,
     /// The error message.
     pub message: String,
-    /// Additional data for the error, typically an underlying 
+    /// Additional data for the error, typically an underlying
     /// cause for the error.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<String>,
@@ -181,10 +185,14 @@ pub trait Service<T> {
     ///
     /// If the method name for the request is not handled by the service
     /// if should return `None`.
-    fn handle(&self, request: &mut Request, context: &Context<T>) -> Result<Option<Response>>;
+    fn handle(
+        &self,
+        request: &mut Request,
+        ctx: &Context<T>,
+    ) -> Result<Option<Response>>;
 }
 
-/// Context information passed to service handlers that wraps type `T`.
+/// Context information passed to service handlers that wraps user data.
 #[derive(Default)]
 pub struct Context<T> {
     /// Inner context data.
@@ -194,10 +202,16 @@ pub struct Context<T> {
 /// Serve requests.
 pub struct Server<'a, T> {
     /// Services that the server should invoke for every request.
-    pub services: &'a Vec<&'a Box<dyn Service<T>>>,
+    services: Vec<&'a Box<dyn Service<T>>>,
 }
 
 impl<'a, T> Server<'a, T> {
+
+    /// Create a new server.
+    pub fn new(services: Vec<&'a Box<dyn Service<T>>>) -> Self {
+        Self { services } 
+    }
+
     /// Call services in order and return the first response message.
     ///
     /// If no services match the incoming request this will
@@ -205,10 +219,10 @@ impl<'a, T> Server<'a, T> {
     pub(crate) fn handle(
         &self,
         request: &mut Request,
-        context: &Context<T>,
+        ctx: &Context<T>,
     ) -> Result<Response> {
-        for service in self.services {
-            if let Some(result) = service.handle(request, context)? {
+        for service in self.services.iter() {
+            if let Some(result) = service.handle(request, ctx)? {
                 return Ok(result);
             }
         }
@@ -225,45 +239,28 @@ impl<'a, T> Server<'a, T> {
     pub fn serve(
         &self,
         request: &mut Request,
-        context: &Context<T>,
+        ctx: &Context<T>,
     ) -> Response {
-        match self.handle(request, context) {
+        match self.handle(request, ctx) {
             Ok(response) => response,
             Err(e) => e.into(),
         }
     }
 }
 
-/// Create a server and call services with a context of `()`.
-pub fn serve<'a>(
-    services: &'a Vec<&'a Box<dyn Service<()>>>,
-    request: &mut Request,
-) -> Response {
-    let server = Server { services };
-    //let data = ();
-    let context = Context {data: ()};
-    match server.handle(request, &context) {
-        Ok(response) => response,
-        Err(e) => e.into(),
-    }
-}
-
 /// Parse a JSON payload from a string slice into a request.
 pub fn from_str(payload: &str) -> Result<Request> {
-    Ok(serde_json::from_str::<Request>(payload)
-        .map_err(map_json_error)?)
+    Ok(serde_json::from_str::<Request>(payload).map_err(map_json_error)?)
 }
 
 /// Parse a JSON payload from a [Value](serde_json::Value) into a request.
 pub fn from_value(payload: Value) -> Result<Request> {
-    Ok(serde_json::from_value::<Request>(payload)
-        .map_err(map_json_error)?)
+    Ok(serde_json::from_value::<Request>(payload).map_err(map_json_error)?)
 }
 
 /// Parse a JSON payload from a byte slice into a request.
 pub fn from_slice<'a>(payload: &'a [u8]) -> Result<Request> {
-    Ok(serde_json::from_slice::<Request>(payload)
-        .map_err(map_json_error)?)
+    Ok(serde_json::from_slice::<Request>(payload).map_err(map_json_error)?)
 }
 
 /// Parse a JSON payload from an IO reader into a request.
@@ -318,16 +315,16 @@ impl Request {
     /// Deserialize and consume the message parameters into type `T`.
     ///
     /// If this request message has no parameters or the `params`
-    /// payload cannot be converted to `T` this will return 
+    /// payload cannot be converted to `T` this will return
     /// `Error::InvalidParams`.
     pub fn deserialize<T: DeserializeOwned>(&mut self) -> Result<T> {
         if let Some(params) = self.params.take() {
-            Ok(
-                serde_json::from_value::<T>(params).map_err(|e| Error::InvalidParams {
+            Ok(serde_json::from_value::<T>(params).map_err(|e| {
+                Error::InvalidParams {
                     id: self.id.clone(),
                     data: e.to_string(),
-                })?,
-            )
+                }
+            })?)
         } else {
             Err(Error::InvalidParams {
                 id: self.id.clone(),
@@ -423,7 +420,11 @@ mod test {
 
     struct HelloServiceHandler;
     impl<T> Service<T> for HelloServiceHandler {
-        fn handle(&self, request: &mut Request, _context: &Context<T>) -> Result<Option<Response>> {
+        fn handle(
+            &self,
+            request: &mut Request,
+            _context: &Context<T>,
+        ) -> Result<Option<Response>> {
             let mut response = None;
             if request.matches("hello") {
                 let params: String = request.deserialize()?;
@@ -436,7 +437,11 @@ mod test {
 
     struct InternalErrorService;
     impl<T> Service<T> for InternalErrorService {
-        fn handle(&self, _request: &mut Request, _context: &Context<T>) -> Result<Option<Response>> {
+        fn handle(
+            &self,
+            _request: &mut Request,
+            _context: &Context<T>,
+        ) -> Result<Option<Response>> {
             // Must Box the error as it is foreign.
             Err(Error::boxed(MockError::Internal("Mock error".to_string())))
         }
@@ -445,9 +450,10 @@ mod test {
     #[test]
     fn jsonrpc_service_ok() -> Result<()> {
         let service: Box<dyn Service<()>> = Box::new(HelloServiceHandler {});
-        let mut request = Request::new("hello", Some(Value::String("world".to_string())));
-        let services = vec![&service];
-        let response = serve(&services, &mut request);
+        let mut request =
+            Request::new("hello", Some(Value::String("world".to_string())));
+        let server = Server::new(vec![&service]);
+        let response = server.serve(&mut request, &Default::default());
         assert_eq!(
             Some(Value::String("Hello, world!".to_string())),
             response.into()
@@ -466,7 +472,9 @@ mod test {
             Some(RpcError {
                 code: -32600,
                 message: "Invalid JSON-RPC request".to_string(),
-                data: Some("missing field `jsonrpc` at line 1 column 2".to_string())
+                data: Some(
+                    "missing field `jsonrpc` at line 1 column 2".to_string()
+                )
             }),
             response.into()
         );
@@ -477,8 +485,8 @@ mod test {
     fn jsonrpc_service_method_not_found() -> Result<()> {
         let service: Box<dyn Service<()>> = Box::new(HelloServiceHandler {});
         let mut request = Request::new("non-existent", None);
-        let services = vec![&service];
-        let response = serve(&services, &mut request);
+        let server = Server::new(vec![&service]);
+        let response = server.serve(&mut request, &Default::default());
         assert_eq!(
             Some(RpcError {
                 code: -32601,
@@ -494,13 +502,16 @@ mod test {
     fn jsonrpc_invalid_params() -> Result<()> {
         let service: Box<dyn Service<()>> = Box::new(HelloServiceHandler {});
         let mut request = Request::new("hello", Some(Value::Bool(true)));
-        let services = vec![&service];
-        let response = serve(&services, &mut request);
+        let server = Server::new(vec![&service]);
+        let response = server.serve(&mut request, &Default::default());
         assert_eq!(
             Some(RpcError {
                 code: -32602,
                 message: "Message parameters are invalid".to_string(),
-                data: Some("invalid type: boolean `true`, expected a string".to_string())
+                data: Some(
+                    "invalid type: boolean `true`, expected a string"
+                        .to_string()
+                )
             }),
             response.into()
         );
@@ -511,8 +522,8 @@ mod test {
     fn jsonrpc_internal_error() -> Result<()> {
         let service: Box<dyn Service<()>> = Box::new(InternalErrorService {});
         let mut request = Request::new("foo", None);
-        let services = vec![&service];
-        let response = serve(&services, &mut request);
+        let server = Server::new(vec![&service]);
+        let response = server.serve(&mut request, &Default::default());
         assert_eq!(
             Some(RpcError {
                 code: -32603,
@@ -535,7 +546,10 @@ mod test {
             Some(RpcError {
                 code: -32700,
                 message: "Parsing failed, invalid JSON data".to_string(),
-                data: Some("EOF while parsing a string at line 1 column 18".to_string())
+                data: Some(
+                    "EOF while parsing a string at line 1 column 18"
+                        .to_string()
+                )
             }),
             response.into()
         );
