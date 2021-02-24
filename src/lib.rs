@@ -42,7 +42,7 @@
 //! For most applications user data can be assigned to the struct that implements 
 //! the `Service` trait but sometimes you may need to serve requests from a callback 
 //! function that passes useful information you want to expose to the service 
-//! methods. Use `Context<T>` with a custom type to expose user data to your handlers 
+//! methods. Use `Context<Data = T>` with a custom type to expose user data to your handlers 
 //! that is not available when the services are created.
 //!
 //! ## Async
