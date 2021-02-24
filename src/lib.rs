@@ -36,6 +36,14 @@
 //! When converting from incoming payloads use the `from_*` functions
 //! to convert JSON to a [Request](Request) so that errors are mapped correctly.
 //!
+//! ## Context
+//!
+//! For most applications user data can be assigned to the struct that implements 
+//! the `Service` trait but sometimes you may need to serve requests from a callback 
+//! function that passes useful information you want to expose to the service 
+//! methods. Use `Context<T>` with a custom type to expose user data to your handlers 
+//! that is not available when the services are created.
+//!
 //! ## Async
 //!
 //! For nonblocking support enable the `async` feature and use the `Service`
@@ -196,7 +204,30 @@ pub trait Service<T> {
 #[derive(Default)]
 pub struct Context<T> {
     /// Inner context data.
-    pub data: T,
+    data: T,
+}
+
+impl<T> Context<T> {
+    /// Create a new context that wraps the given user data.
+    pub fn new(data: T) -> Self {
+        Self {data} 
+    }
+
+    /// Get a reference to the inner data.
+    pub fn data(&self) -> &T {
+        &self.data 
+    }
+
+    /// Get a mutable reference to the inner data.
+    pub fn data_mut(&mut self) -> &mut T {
+        &mut self.data 
+    }
+}
+
+impl<T> From<T> for Context<T> {
+    fn from(data: T) -> Self {
+        Self {data} 
+    }
 }
 
 /// Serve requests.

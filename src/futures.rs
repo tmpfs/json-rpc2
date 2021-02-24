@@ -5,6 +5,8 @@ use async_trait::async_trait;
 
 #[async_trait]
 /// Trait for async services that maybe handle a request.
+///
+/// Only available with the `async` feature.
 pub trait Service<T: Send + Send> {
     /// See [Service](crate::Service) for more information.
     async fn handle(
@@ -15,6 +17,8 @@ pub trait Service<T: Send + Send> {
 }
 
 /// Serve requests.
+///
+/// Only available with the `async` feature.
 pub struct Server<'a, T: Send + Sync> {
     /// Services that the server should invoke for every request.
     services: Vec<&'a Box<dyn Service<T>>>,
