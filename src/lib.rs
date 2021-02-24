@@ -189,7 +189,7 @@ pub struct RpcError {
 /// Trait for services that maybe handle a request.
 pub trait Service {
     /// Type of the user data for this service.
-    type Data: Send;
+    type Data;
 
     /// Service implementations are invoked with a request
     /// and should reply with a response if the method name
