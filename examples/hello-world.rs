@@ -23,7 +23,7 @@ fn main() -> Result<()> {
     let mut request =
         Request::new("hello", Some(Value::String("world".to_string())));
     let server = Server::new(vec![&service]);
-    let response = server.serve(&mut request, &Default::default());
+    let response = server.serve(&mut request, &Context::new(()));
     println!("{:?}", response.result());
     assert_eq!(
         Some(Value::String("Hello, world!".to_string())),

@@ -23,7 +23,7 @@
 //!    let mut request = Request::new(
 //!        "hello", Some(Value::String("world".to_string())));
 //!    let server = Server::new(vec![&service]);
-//!    let response = server.serve(&mut request, &Default::default());
+//!    let response = server.serve(&mut request, &Context::new(()));
 //!    assert_eq!(
 //!        Some(Value::String("Hello, world!".to_string())),
 //!        response.into());
@@ -201,7 +201,6 @@ pub trait Service<T> {
 }
 
 /// Context information passed to service handlers that wraps user data.
-#[derive(Default)]
 pub struct Context<T> {
     /// Inner context data.
     data: T,
@@ -487,7 +486,7 @@ mod test {
         let mut request =
             Request::new("hello", Some(Value::String("world".to_string())));
         let server = Server::new(vec![&service]);
-        let response = server.serve(&mut request, &Default::default());
+        let response = server.serve(&mut request, &Context::new(()));
         assert_eq!(
             Some(Value::String("Hello, world!".to_string())),
             response.into()
@@ -520,7 +519,7 @@ mod test {
         let service: Box<dyn Service<()>> = Box::new(HelloServiceHandler {});
         let mut request = Request::new("non-existent", None);
         let server = Server::new(vec![&service]);
-        let response = server.serve(&mut request, &Default::default());
+        let response = server.serve(&mut request, &Context::new(()));
         assert_eq!(
             Some(RpcError {
                 code: -32601,
@@ -537,7 +536,7 @@ mod test {
         let service: Box<dyn Service<()>> = Box::new(HelloServiceHandler {});
         let mut request = Request::new("hello", Some(Value::Bool(true)));
         let server = Server::new(vec![&service]);
-        let response = server.serve(&mut request, &Default::default());
+        let response = server.serve(&mut request, &Context::new(()));
         assert_eq!(
             Some(RpcError {
                 code: -32602,
@@ -557,7 +556,7 @@ mod test {
         let service: Box<dyn Service<()>> = Box::new(InternalErrorService {});
         let mut request = Request::new("foo", None);
         let server = Server::new(vec![&service]);
-        let response = server.serve(&mut request, &Default::default());
+        let response = server.serve(&mut request, &Context::new(()));
         assert_eq!(
             Some(RpcError {
                 code: -32603,
