@@ -1,18 +1,22 @@
 use json_rpc2::*;
 use serde_json::Value;
 
+#[derive(Debug)]
+struct ServiceData {
+    pub message: String,
+}
+
 struct ServiceHandler;
 impl Service for ServiceHandler {
-    type Data = ();
+    type Data = ServiceData;
     fn handle(
         &self,
         request: &mut Request,
-        _ctx: &Context<Self::Data>,
+        ctx: &Context<Self::Data>,
     ) -> Result<Option<Response>> {
         let mut response = None;
         if request.matches("hello") {
-            let params: String = request.deserialize()?;
-            let message = format!("Hello, {}!", params);
+            let message = format!("Hello, {}!", &ctx.data().message);
             response = Some((request, Value::String(message)).into());
         }
         Ok(response)
@@ -20,11 +24,11 @@ impl Service for ServiceHandler {
 }
 
 fn main() -> Result<()> {
-    let service: Box<dyn Service<Data = ()>> = Box::new(ServiceHandler {});
-    let mut request =
-        Request::new("hello", Some(Value::String("world".to_string())));
+    let service: Box<dyn Service<Data = ServiceData>> = Box::new(ServiceHandler {});
+    let mut request = Request::new("hello", None);
     let server = Server::new(vec![&service]);
-    let response = server.serve(&mut request, &Context::new(()));
+    let data = ServiceData { message: "world".to_string() };
+    let response = server.serve(&mut request, &Context::new(data));
     println!("{:?}", response.result());
     assert_eq!(
         Some(Value::String("Hello, world!".to_string())),

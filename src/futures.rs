@@ -7,12 +7,15 @@ use async_trait::async_trait;
 /// Trait for async services that maybe handle a request.
 ///
 /// Only available with the `async` feature.
-pub trait Service<T: Send + Send> {
+pub trait Service {
+    /// Type of the user data for this service.
+    type Data: Send + Sync;
+
     /// See [Service](crate::Service) for more information.
     async fn handle(
         &self,
         request: &mut Request,
-        ctx: &Context<T>,
+        ctx: &Context<Self::Data>,
     ) -> Result<Option<Response>>;
 }
 
@@ -24,12 +27,12 @@ pub trait Service<T: Send + Send> {
 /// Only available with the `async` feature.
 pub struct Server<'a, T: Send + Sync> {
     /// Services that the server should invoke for every request.
-    services: Vec<&'a Box<dyn Service<T>>>,
+    services: Vec<&'a Box<dyn Service<Data = T>>>,
 }
 
 impl<'a, T: Send + Sync> Server<'a, T> {
     /// Create a new server.
-    pub fn new(services: Vec<&'a Box<dyn Service<T>>>) -> Self {
+    pub fn new(services: Vec<&'a Box<dyn Service<Data = T>>>) -> Self {
         Self {services} 
     }
 

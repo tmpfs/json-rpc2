@@ -5,11 +5,12 @@ use serde_json::Value;
 struct ServiceHandler;
 
 #[async_trait]
-impl<T: Send + Sync> Service<T> for ServiceHandler {
+impl Service for ServiceHandler {
+    type Data = ();
     async fn handle(
         &self,
         req: &mut Request,
-        _ctx: &Context<T>,
+        _ctx: &Context<Self::Data>,
     ) -> Result<Option<Response>> {
         let mut response = None;
         if req.matches("hello") {
@@ -23,7 +24,7 @@ impl<T: Send + Sync> Service<T> for ServiceHandler {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let service: Box<dyn Service<()>> = Box::new(ServiceHandler {});
+    let service: Box<dyn Service<Data = ()>> = Box::new(ServiceHandler {});
     let mut request =
         Request::new("hello", Some(Value::String("world".to_string())));
     let server = Server::new(vec![&service]);
