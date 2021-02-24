@@ -1,6 +1,6 @@
 [package]
 name = "json-rpc2"
-version = "0.8.0"
+version = "0.8.1"
 authors = ["muji <muji@tmpfs.org>"]
 edition = "2018"
 description = "Simple, robust and pragmatic JSON-RPC 2.0 implementation"
@@ -24,9 +24,6 @@ json-rpc2 = { path = ".", features = ["async"] }
 
 [features]
 async = ["async-trait"]
-
-[profile.test]
-default = ["async"]
 
 [package.metadata.docs.rs]
 features = ["async"]
