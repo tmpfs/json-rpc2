@@ -242,7 +242,7 @@ pub struct Server<'a, T> {
     services: Vec<&'a Box<dyn Service<Data = T>>>,
 }
 
-impl<'a, T: Send> Server<'a, T> {
+impl<'a, T> Server<'a, T> {
 
     /// Create a new server.
     pub fn new(services: Vec<&'a Box<dyn Service<Data = T>>>) -> Self {

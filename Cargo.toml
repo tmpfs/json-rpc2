@@ -1,6 +1,6 @@
 [package]
 name = "json-rpc2"
-version = "0.7.2"
+version = "0.7.3"
 authors = ["muji <muji@tmpfs.org>"]
 edition = "2018"
 description = "Simple, robust and pragmatic JSON-RPC 2.0 implementation"
