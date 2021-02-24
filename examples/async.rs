@@ -29,10 +29,10 @@ async fn main() -> Result<()> {
         Request::new("hello", Some(Value::String("world".to_string())));
     let server = Server::new(vec![&service]);
     let response = server.serve(&mut request, &()).await;
-    println!("{:?}", response.result());
+    println!("{:?}", response.as_ref().unwrap().result());
     assert_eq!(
         Some(Value::String("Hello, world!".to_string())),
-        response.into()
+        response.unwrap().into()
     );
     Ok(())
 }

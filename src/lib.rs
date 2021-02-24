@@ -27,7 +27,7 @@
 //!    let response = server.serve(&mut request, &());
 //!    assert_eq!(
 //!        Some(Value::String("Hello, world!".to_string())),
-//!        response.into());
+//!        response.unwrap().into());
 //!    Ok(())
 //! }
 //! ```
@@ -94,7 +94,7 @@ pub enum Error {
     #[error("Service method not found: {name}")]
     MethodNotFound {
         /// The id of the request message.
-        id: Value,
+        id: Option<Value>,
         /// The name of the request method.
         name: String,
     },
@@ -104,7 +104,7 @@ pub enum Error {
     #[error("Message parameters are invalid")]
     InvalidParams {
         /// The id of the request message.
-        id: Value,
+        id: Option<Value>,
         /// The underlying JSON error message.
         data: String,
     },
@@ -162,7 +162,7 @@ impl Into<Response> for Error {
         let (code, data): (isize, Option<String>) = (&self).into();
         Response {
             jsonrpc: VERSION.to_string(),
-            id: Value::Null,
+            id: Some(Value::Null),
             result: None,
             error: Some(RpcError {
                 code,
@@ -244,14 +244,20 @@ impl<'a, T> Server<'a, T> {
     }
 
     /// Infallible service handler, errors are automatically converted to responses.
+    ///
+    /// If a request was a notification (no id field) this will yield `None`.
     pub fn serve(
         &self,
         request: &mut Request,
         ctx: &T,
-    ) -> Response {
+    ) -> Option<Response> {
         match self.handle(request, ctx) {
-            Ok(response) => response,
-            Err(e) => e.into(),
+            Ok(response) => {
+                if response.error().is_some() || response.id().is_some() {
+                    Some(response)
+                } else { None }
+            },
+            Err(e) => Some(e.into()),
         }
     }
 }
@@ -281,8 +287,9 @@ pub fn from_reader<R: std::io::Read>(payload: R) -> Result<Request> {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Request {
     jsonrpc: String,
-    id: Value,
     method: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    id: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     params: Option<Value>,
 }
@@ -294,14 +301,14 @@ impl Request {
             jsonrpc: VERSION.to_string(),
             method: method.to_string(),
             params,
-            id: Value::Number(Number::from(
+            id: Some(Value::Number(Number::from(
                 rand::thread_rng().gen_range(0..std::u32::MAX) + 1,
-            )),
+            ))),
         }
     }
 
     /// The id for the request.
-    pub fn id(&self) -> &Value {
+    pub fn id(&self) -> &Option<Value> {
         &self.id
     }
 
@@ -358,8 +365,8 @@ fn map_json_error(e: serde_json::Error) -> Error {
 #[derive(Deserialize, Serialize, Debug)]
 pub struct Response {
     jsonrpc: String,
-    #[serde(skip_serializing_if = "Value::is_null")]
-    id: Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    id: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     result: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -368,7 +375,7 @@ pub struct Response {
 
 impl Response {
     /// The id for the response.
-    pub fn id(&self) -> &Value {
+    pub fn id(&self) -> &Option<Value> {
         &self.id
     }
 
@@ -466,7 +473,7 @@ mod test {
         let response = server.serve(&mut request, &());
         assert_eq!(
             Some(Value::String("Hello, world!".to_string())),
-            response.into()
+            response.unwrap().into()
         );
         Ok(())
     }
@@ -503,7 +510,7 @@ mod test {
                 message: "Service method not found: non-existent".to_string(),
                 data: None
             }),
-            response.into()
+            response.unwrap().into()
         );
         Ok(())
     }
@@ -523,7 +530,7 @@ mod test {
                         .to_string()
                 )
             }),
-            response.into()
+            response.unwrap().into()
         );
         Ok(())
     }
@@ -540,7 +547,7 @@ mod test {
                 message: "Mock error".to_string(),
                 data: None
             }),
-            response.into()
+            response.unwrap().into()
         );
         Ok(())
     }

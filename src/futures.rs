@@ -64,10 +64,14 @@ impl<'a, T: Send + Sync> Server<'a, T> {
         &self,
         request: &mut Request,
         ctx: &T,
-    ) -> Response {
+    ) -> Option<Response> {
         match self.handle(request, ctx).await {
-            Ok(response) => response,
-            Err(e) => e.into(),
+            Ok(response) => {
+                if response.error().is_some() || response.id().is_some() {
+                    Some(response)
+                } else { None }
+            },
+            Err(e) => Some(e.into()),
         }
     }
 }

@@ -29,10 +29,10 @@ fn main() -> Result<()> {
     let server = Server::new(vec![&service]);
     let data = ServiceData { message: "world".to_string() };
     let response = server.serve(&mut request, &data);
-    println!("{:?}", response.result());
+    println!("{:?}", response.as_ref().unwrap().result());
     assert_eq!(
         Some(Value::String("Hello, world!".to_string())),
-        response.into()
+        response.unwrap().into()
     );
     Ok(())
 }
