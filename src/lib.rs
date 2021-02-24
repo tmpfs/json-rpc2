@@ -189,7 +189,7 @@ pub struct RpcError {
 /// Trait for services that maybe handle a request.
 pub trait Service {
     /// Type of the user data for this service.
-    type Data;
+    type Data: Send;
 
     /// Service implementations are invoked with a request
     /// and should reply with a response if the method name
@@ -242,7 +242,7 @@ pub struct Server<'a, T> {
     services: Vec<&'a Box<dyn Service<Data = T>>>,
 }
 
-impl<'a, T> Server<'a, T> {
+impl<'a, T: Send> Server<'a, T> {
 
     /// Create a new server.
     pub fn new(services: Vec<&'a Box<dyn Service<Data = T>>>) -> Self {
