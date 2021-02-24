@@ -25,7 +25,7 @@ impl Service for ServiceHandler {
 
 fn main() -> Result<()> {
     let service: Box<dyn Service<Data = ServiceData>> = Box::new(ServiceHandler {});
-    let mut request = Request::new("hello", None);
+    let mut request = Request::new_reply("hello", None);
     let server = Server::new(vec![&service]);
     let data = ServiceData { message: "world".to_string() };
     let response = server.serve(&mut request, &data);

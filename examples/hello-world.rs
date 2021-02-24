@@ -22,7 +22,7 @@ impl Service for ServiceHandler {
 fn main() -> Result<()> {
     let service: Box<dyn Service<Data = ()>> = Box::new(ServiceHandler {});
     let mut request =
-        Request::new("hello", Some(Value::String("world".to_string())));
+        Request::new_reply("hello", Some(Value::String("world".to_string())));
     let server = Server::new(vec![&service]);
     let response = server.serve(&mut request, &());
     println!("{:?}", response.as_ref().unwrap().result());

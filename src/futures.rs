@@ -60,6 +60,8 @@ impl<'a, T: Send + Sync> Server<'a, T> {
     }
 
     /// Infallible service handler, errors are automatically converted to responses.
+    ///
+    /// If a request was a notification (no id field) this will yield `None`.
     pub async fn serve(
         &self,
         request: &mut Request,
