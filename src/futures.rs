@@ -1,6 +1,6 @@
 //! Non-blocking implementation, requires the `async` feature.
 
-use crate::{Context, Error, Request, Response, Result};
+use crate::{Error, Request, Response, Result};
 use async_trait::async_trait;
 
 #[async_trait]
@@ -15,7 +15,7 @@ pub trait Service {
     async fn handle(
         &self,
         request: &mut Request,
-        ctx: &Context<Self::Data>,
+        ctx: &Self::Data,
     ) -> Result<Option<Response>>;
 }
 
@@ -43,7 +43,7 @@ impl<'a, T: Send + Sync> Server<'a, T> {
     pub(crate) async fn handle(
         &self,
         request: &mut Request,
-        ctx: &Context<T>,
+        ctx: &T,
     ) -> Result<Response> {
         for service in self.services.iter() {
             if let Some(result) = service.handle(request, ctx).await? {
@@ -63,7 +63,7 @@ impl<'a, T: Send + Sync> Server<'a, T> {
     pub async fn serve(
         &self,
         request: &mut Request,
-        ctx: &Context<T>,
+        ctx: &T,
     ) -> Response {
         match self.handle(request, ctx).await {
             Ok(response) => response,

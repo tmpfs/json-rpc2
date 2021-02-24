@@ -7,7 +7,7 @@ impl Service for ServiceHandler {
     fn handle(
         &self,
         request: &mut Request,
-        _ctx: &Context<Self::Data>,
+        _ctx: &Self::Data,
     ) -> Result<Option<Response>> {
         let mut response = None;
         if request.matches("hello") {
@@ -24,7 +24,7 @@ fn main() -> Result<()> {
     let mut request =
         Request::new("hello", Some(Value::String("world".to_string())));
     let server = Server::new(vec![&service]);
-    let response = server.serve(&mut request, &Context::new(()));
+    let response = server.serve(&mut request, &());
     println!("{:?}", response.result());
     assert_eq!(
         Some(Value::String("Hello, world!".to_string())),

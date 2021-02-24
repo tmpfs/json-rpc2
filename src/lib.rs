@@ -8,7 +8,7 @@
 //! struct ServiceHandler;
 //! impl Service for ServiceHandler {
 //!    type Data = ();
-//!    fn handle(&self, request: &mut Request, _ctx: &Context<Self::Data>) -> Result<Option<Response>> {
+//!    fn handle(&self, request: &mut Request, _ctx: &Self::Data) -> Result<Option<Response>> {
 //!        let mut response = None;
 //!        if request.matches("hello") {
 //!            let params: String = request.deserialize()?;
@@ -24,7 +24,7 @@
 //!    let mut request = Request::new(
 //!        "hello", Some(Value::String("world".to_string())));
 //!    let server = Server::new(vec![&service]);
-//!    let response = server.serve(&mut request, &Context::new(()));
+//!    let response = server.serve(&mut request, &());
 //!    assert_eq!(
 //!        Some(Value::String("Hello, world!".to_string())),
 //!        response.into());
@@ -42,7 +42,7 @@
 //! For most applications user data can be assigned to the struct that implements 
 //! the `Service` trait but sometimes you may need to serve requests from a callback 
 //! function that passes useful information you want to expose to the service 
-//! methods. Use `Context<Data = T>` with a custom type to expose user data to your handlers 
+//! methods. Use `Data = T` with a custom type to expose user data to your handlers 
 //! that is not available when the services are created.
 //!
 //! ## Async
@@ -200,37 +200,8 @@ pub trait Service {
     fn handle(
         &self,
         request: &mut Request,
-        ctx: &Context<Self::Data>,
+        ctx: &Self::Data,
     ) -> Result<Option<Response>>;
-}
-
-/// Context information passed to service handlers that wraps user data.
-pub struct Context<T> {
-    /// Inner context data.
-    data: T,
-}
-
-impl<T> Context<T> {
-    /// Create a new context that wraps the given user data.
-    pub fn new(data: T) -> Self {
-        Self {data} 
-    }
-
-    /// Get a reference to the inner data.
-    pub fn data(&self) -> &T {
-        &self.data 
-    }
-
-    /// Get a mutable reference to the inner data.
-    pub fn data_mut(&mut self) -> &mut T {
-        &mut self.data 
-    }
-}
-
-impl<T> From<T> for Context<T> {
-    fn from(data: T) -> Self {
-        Self {data} 
-    }
 }
 
 /// Serve requests.
@@ -256,7 +227,7 @@ impl<'a, T> Server<'a, T> {
     pub(crate) fn handle(
         &self,
         request: &mut Request,
-        ctx: &Context<T>,
+        ctx: &T,
     ) -> Result<Response> {
         for service in self.services.iter() {
             if let Some(result) = service.handle(request, ctx)? {
@@ -276,7 +247,7 @@ impl<'a, T> Server<'a, T> {
     pub fn serve(
         &self,
         request: &mut Request,
-        ctx: &Context<T>,
+        ctx: &T,
     ) -> Response {
         match self.handle(request, ctx) {
             Ok(response) => response,
@@ -461,7 +432,7 @@ mod test {
         fn handle(
             &self,
             request: &mut Request,
-            _context: &Context<Self::Data>,
+            _context: &Self::Data,
         ) -> Result<Option<Response>> {
             let mut response = None;
             if request.matches("hello") {
@@ -479,7 +450,7 @@ mod test {
         fn handle(
             &self,
             _request: &mut Request,
-            _context: &Context<Self::Data>,
+            _context: &Self::Data,
         ) -> Result<Option<Response>> {
             // Must Box the error as it is foreign.
             Err(Error::boxed(MockError::Internal("Mock error".to_string())))
@@ -492,7 +463,7 @@ mod test {
         let mut request =
             Request::new("hello", Some(Value::String("world".to_string())));
         let server = Server::new(vec![&service]);
-        let response = server.serve(&mut request, &Context::new(()));
+        let response = server.serve(&mut request, &());
         assert_eq!(
             Some(Value::String("Hello, world!".to_string())),
             response.into()
@@ -525,7 +496,7 @@ mod test {
         let service: Box<dyn Service<Data = ()>> = Box::new(HelloServiceHandler {});
         let mut request = Request::new("non-existent", None);
         let server = Server::new(vec![&service]);
-        let response = server.serve(&mut request, &Context::new(()));
+        let response = server.serve(&mut request, &());
         assert_eq!(
             Some(RpcError {
                 code: -32601,
@@ -542,7 +513,7 @@ mod test {
         let service: Box<dyn Service<Data = ()>> = Box::new(HelloServiceHandler {});
         let mut request = Request::new("hello", Some(Value::Bool(true)));
         let server = Server::new(vec![&service]);
-        let response = server.serve(&mut request, &Context::new(()));
+        let response = server.serve(&mut request, &());
         assert_eq!(
             Some(RpcError {
                 code: -32602,
@@ -562,7 +533,7 @@ mod test {
         let service: Box<dyn Service<Data = ()>> = Box::new(InternalErrorService {});
         let mut request = Request::new("foo", None);
         let server = Server::new(vec![&service]);
-        let response = server.serve(&mut request, &Context::new(()));
+        let response = server.serve(&mut request, &());
         assert_eq!(
             Some(RpcError {
                 code: -32603,

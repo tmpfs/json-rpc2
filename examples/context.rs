@@ -12,11 +12,11 @@ impl Service for ServiceHandler {
     fn handle(
         &self,
         request: &mut Request,
-        ctx: &Context<Self::Data>,
+        ctx: &Self::Data,
     ) -> Result<Option<Response>> {
         let mut response = None;
         if request.matches("hello") {
-            let message = format!("Hello, {}!", &ctx.data().message);
+            let message = format!("Hello, {}!", &ctx.message);
             response = Some((request, Value::String(message)).into());
         }
         Ok(response)
@@ -28,7 +28,7 @@ fn main() -> Result<()> {
     let mut request = Request::new("hello", None);
     let server = Server::new(vec![&service]);
     let data = ServiceData { message: "world".to_string() };
-    let response = server.serve(&mut request, &Context::new(data));
+    let response = server.serve(&mut request, &data);
     println!("{:?}", response.result());
     assert_eq!(
         Some(Value::String("Hello, world!".to_string())),

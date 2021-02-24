@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use json_rpc2::{futures::*, Context, Request, Response, Result};
+use json_rpc2::{futures::*, Request, Response, Result};
 use serde_json::Value;
 
 struct ServiceHandler;
@@ -10,7 +10,7 @@ impl Service for ServiceHandler {
     async fn handle(
         &self,
         req: &mut Request,
-        _ctx: &Context<Self::Data>,
+        _ctx: &Self::Data,
     ) -> Result<Option<Response>> {
         let mut response = None;
         if req.matches("hello") {
@@ -28,7 +28,7 @@ async fn main() -> Result<()> {
     let mut request =
         Request::new("hello", Some(Value::String("world".to_string())));
     let server = Server::new(vec![&service]);
-    let response = server.serve(&mut request, &Context::new(())).await;
+    let response = server.serve(&mut request, &()).await;
     println!("{:?}", response.result());
     assert_eq!(
         Some(Value::String("Hello, world!".to_string())),
