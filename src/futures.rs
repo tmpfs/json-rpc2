@@ -7,7 +7,7 @@ use async_trait::async_trait;
 /// Trait for async services that maybe handle a request.
 ///
 /// Only available with the `async` feature.
-pub trait Service {
+pub trait Service: Send + Sync {
     /// Type of the user data for this service.
     type Data: Send + Sync;
 
