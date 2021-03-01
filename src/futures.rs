@@ -21,7 +21,7 @@ pub trait Service: Send + Sync {
 
 /// Serve requests.
 ///
-/// Requests are passed to each service in turn and the first service 
+/// Requests are passed to each service in turn and the first service
 /// that returns a response wins.
 ///
 /// Only available with the `async` feature.
@@ -33,7 +33,7 @@ pub struct Server<'a, T: Send + Sync> {
 impl<'a, T: Send + Sync> Server<'a, T> {
     /// Create a new server.
     pub fn new(services: Vec<&'a Box<dyn Service<Data = T>>>) -> Self {
-        Self {services} 
+        Self { services }
     }
 
     /// Call services in order and return the first response message.
@@ -71,8 +71,10 @@ impl<'a, T: Send + Sync> Server<'a, T> {
             Ok(response) => {
                 if response.error().is_some() || response.id().is_some() {
                     Some(response)
-                } else { None }
-            },
+                } else {
+                    None
+                }
+            }
             Err(e) => Some(e.into()),
         }
     }

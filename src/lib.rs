@@ -39,10 +39,10 @@
 //!
 //! ## Context
 //!
-//! For most applications user data can be assigned to the struct that implements 
-//! the `Service` trait but sometimes you may need to serve requests from a callback 
-//! function that passes useful information you want to expose to the service 
-//! methods. Use `Data = T` with a custom type to expose user data to your handlers 
+//! For most applications user data can be assigned to the struct that implements
+//! the `Service` trait but sometimes you may need to serve requests from a callback
+//! function that passes useful information you want to expose to the service
+//! methods. Use `Data = T` with a custom type to expose user data to your handlers
 //! that is not available when the services are created.
 //!
 //! ## Async
@@ -111,18 +111,7 @@ pub enum Error {
 
     /// Generic error type converted to an internal error response.
     #[error(transparent)]
-    Boxed(#[from] Box<dyn std::error::Error + Send>),
-}
-
-impl Error {
-    /// Helper function to `Box` an error implementation.
-    ///
-    /// Service handlers can call `map_err(Error::boxed)?` to propagate
-    /// foreign errors.
-    pub fn boxed(e: impl std::error::Error + Send + 'static) -> Self {
-        let err: Box<dyn std::error::Error + Send> = Box::new(e);
-        Error::from(err)
-    }
+    Boxed(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
 impl<'a> Into<(isize, Option<String>)> for &'a Error {
@@ -206,7 +195,7 @@ pub trait Service: Send + Sync {
 
 /// Serve requests.
 ///
-/// Requests are passed to each service in turn and the first service 
+/// Requests are passed to each service in turn and the first service
 /// that returns a response wins.
 pub struct Server<'a, T> {
     /// Services that the server should invoke for every request.
@@ -214,10 +203,9 @@ pub struct Server<'a, T> {
 }
 
 impl<'a, T> Server<'a, T> {
-
     /// Create a new server.
     pub fn new(services: Vec<&'a Box<dyn Service<Data = T>>>) -> Self {
-        Self { services } 
+        Self { services }
     }
 
     /// Call services in order and return the first response message.
@@ -246,17 +234,15 @@ impl<'a, T> Server<'a, T> {
     /// Infallible service handler, errors are automatically converted to responses.
     ///
     /// If a request was a notification (no id field) this will yield `None`.
-    pub fn serve(
-        &self,
-        request: &mut Request,
-        ctx: &T,
-    ) -> Option<Response> {
+    pub fn serve(&self, request: &mut Request, ctx: &T) -> Option<Response> {
         match self.handle(request, ctx) {
             Ok(response) => {
                 if response.error().is_some() || response.id().is_some() {
                     Some(response)
-                } else { None }
-            },
+                } else {
+                    None
+                }
+            }
             Err(e) => Some(e.into()),
         }
     }
@@ -474,15 +460,20 @@ mod test {
             _context: &Self::Data,
         ) -> Result<Option<Response>> {
             // Must Box the error as it is foreign.
-            Err(Error::boxed(MockError::Internal("Mock error".to_string())))
+            Err(Error::from(Box::from(MockError::Internal(
+                "Mock error".to_string(),
+            ))))
         }
     }
 
     #[test]
     fn jsonrpc_service_ok() -> Result<()> {
-        let service: Box<dyn Service<Data = ()>> = Box::new(HelloServiceHandler {});
-        let mut request =
-            Request::new_reply("hello", Some(Value::String("world".to_string())));
+        let service: Box<dyn Service<Data = ()>> =
+            Box::new(HelloServiceHandler {});
+        let mut request = Request::new_reply(
+            "hello",
+            Some(Value::String("world".to_string())),
+        );
         let server = Server::new(vec![&service]);
         let response = server.serve(&mut request, &());
         assert_eq!(
@@ -494,9 +485,12 @@ mod test {
 
     #[test]
     fn jsonrpc_service_notification() -> Result<()> {
-        let service: Box<dyn Service<Data = ()>> = Box::new(HelloServiceHandler {});
-        let mut request =
-            Request::new_notification("hello", Some(Value::String("world".to_string())));
+        let service: Box<dyn Service<Data = ()>> =
+            Box::new(HelloServiceHandler {});
+        let mut request = Request::new_notification(
+            "hello",
+            Some(Value::String("world".to_string())),
+        );
         let server = Server::new(vec![&service]);
         let response = server.serve(&mut request, &());
         assert_eq!(None, response);
@@ -525,7 +519,8 @@ mod test {
 
     #[test]
     fn jsonrpc_service_method_not_found() -> Result<()> {
-        let service: Box<dyn Service<Data = ()>> = Box::new(HelloServiceHandler {});
+        let service: Box<dyn Service<Data = ()>> =
+            Box::new(HelloServiceHandler {});
         let mut request = Request::new_reply("non-existent", None);
         let server = Server::new(vec![&service]);
         let response = server.serve(&mut request, &());
@@ -542,7 +537,8 @@ mod test {
 
     #[test]
     fn jsonrpc_invalid_params() -> Result<()> {
-        let service: Box<dyn Service<Data = ()>> = Box::new(HelloServiceHandler {});
+        let service: Box<dyn Service<Data = ()>> =
+            Box::new(HelloServiceHandler {});
         let mut request = Request::new_reply("hello", Some(Value::Bool(true)));
         let server = Server::new(vec![&service]);
         let response = server.serve(&mut request, &());
@@ -562,7 +558,8 @@ mod test {
 
     #[test]
     fn jsonrpc_internal_error() -> Result<()> {
-        let service: Box<dyn Service<Data = ()>> = Box::new(InternalErrorService {});
+        let service: Box<dyn Service<Data = ()>> =
+            Box::new(InternalErrorService {});
         let mut request = Request::new_reply("foo", None);
         let server = Server::new(vec![&service]);
         let response = server.serve(&mut request, &());
