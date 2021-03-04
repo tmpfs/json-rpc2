@@ -176,7 +176,7 @@ pub struct RpcError {
 }
 
 /// Trait for services that maybe handle a request.
-pub trait Service {
+pub trait Service: Send + Sync {
     /// Type of the user data for this service.
     type Data;
 
