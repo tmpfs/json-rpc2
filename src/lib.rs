@@ -281,6 +281,16 @@ pub struct Request {
 }
 
 impl Request {
+    /// Create a new request.
+    pub fn new(id: Option<Value>, method: String, params: Option<Value>) -> Self {
+        Self {
+            jsonrpc: VERSION.to_string(),
+            id,
+            method,
+            params,
+        }
+    }
+
     /// Create a new request that expects a reply.
     ///
     /// A random number is generated for the message id.
@@ -387,6 +397,12 @@ impl Response {
     /// The error for the response.
     pub fn error(&self) -> &Option<RpcError> {
         &self.error
+    }
+}
+
+impl Into<(Option<Value>, Option<RpcError>, Option<Value>)> for Response {
+    fn into(self) -> (Option<Value>, Option<RpcError>, Option<Value>) {
+        (self.id, self.error, self.result)
     }
 }
 
