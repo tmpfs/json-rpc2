@@ -258,7 +258,7 @@ impl<'a, T> Server<'a, T> {
                     None
                 }
             }
-            Err(e) => Some(e.into()),
+            Err(e) => Some((request, e).into()),
         }
     }
 }
