@@ -162,6 +162,15 @@ impl Into<Response> for Error {
     }
 }
 
+impl<'a> From<(&'a mut Request, &'a str)> for Error {
+    fn from(value: (&'a mut Request, &'a str)) -> Error {
+        Error::InvalidParams {
+            id: value.0.id().clone(),
+            data: value.1.to_string(),
+        }  
+    }
+}
+
 /// Error information for response messages.
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct RpcError {
