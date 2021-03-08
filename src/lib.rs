@@ -164,9 +164,15 @@ impl Into<Response> for Error {
 
 impl<'a> From<(&'a mut Request, &'a str)> for Error {
     fn from(value: (&'a mut Request, &'a str)) -> Error {
+        Error::from((value.0, value.1.to_string()))
+    }
+}
+
+impl<'a> From<(&'a mut Request, String)> for Error {
+    fn from(value: (&'a mut Request, String)) -> Error {
         Error::InvalidParams {
             id: value.0.id().clone(),
-            data: value.1.to_string(),
+            data: value.1,
         }  
     }
 }
