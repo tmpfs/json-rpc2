@@ -337,6 +337,12 @@ impl Request {
         &self.id
     }
 
+    /// The mutable id for the request if you need to take it 
+    /// to assign to response.
+    pub fn id_mut(&mut self) -> &mut Option<Value> {
+        &mut self.id
+    }
+
     /// The request service method name.
     pub fn method(&self) -> &str {
         &self.method
