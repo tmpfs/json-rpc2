@@ -315,7 +315,7 @@ impl Request {
             method: method.to_string(),
             params,
             id: Some(Value::Number(Number::from(
-                rand::thread_rng().gen_range(0..std::u32::MAX) + 1,
+                rand::thread_rng().gen_range(1..std::u32::MAX),
             ))),
         }
     }
