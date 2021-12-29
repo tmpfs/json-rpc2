@@ -405,6 +405,19 @@ pub struct Response {
 }
 
 impl Response {
+    /// Create a response that is a notification.
+    ///
+    /// Typically used to broadcast messages to multiple connected 
+    /// clients.
+    pub fn new_notification(result: Option<Value>) -> Self {
+        Self {
+            jsonrpc: VERSION.to_string(),
+            result,
+            error: None,
+            id: None,
+        } 
+    }
+
     /// The id for the response.
     pub fn id(&self) -> &Option<Value> {
         &self.id
