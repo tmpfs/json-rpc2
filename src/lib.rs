@@ -173,7 +173,7 @@ impl<'a> From<(&'a mut Request, String)> for Error {
         Error::InvalidParams {
             id: value.0.id().clone(),
             data: value.1,
-        }  
+        }
     }
 }
 
@@ -297,7 +297,11 @@ pub struct Request {
 
 impl Request {
     /// Create a new request.
-    pub fn new(id: Option<Value>, method: String, params: Option<Value>) -> Self {
+    pub fn new(
+        id: Option<Value>,
+        method: String,
+        params: Option<Value>,
+    ) -> Self {
         Self {
             jsonrpc: VERSION.to_string(),
             id,
@@ -337,7 +341,7 @@ impl Request {
         &self.id
     }
 
-    /// The mutable id for the request if you need to take it 
+    /// The mutable id for the request if you need to take it
     /// to assign to response.
     pub fn id_mut(&mut self) -> &mut Option<Value> {
         &mut self.id
@@ -467,7 +471,7 @@ impl From<Value> for Response {
             jsonrpc: VERSION.to_string(),
             result: Some(result),
             error: None,
-            id: None,
+            id: Some(Value::from(Number::from(0))),
         }
     }
 }
