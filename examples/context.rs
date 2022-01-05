@@ -11,14 +11,16 @@ impl Service for ServiceHandler {
     type Data = ServiceData;
     fn handle(
         &self,
-        request: &mut Request,
+        request: &Request,
         ctx: &Self::Data,
     ) -> Result<Option<Response>> {
-        let mut response = None;
-        if request.matches("hello") {
-            let message = format!("Hello, {}!", &ctx.message);
-            response = Some((request, Value::String(message)).into());
-        }
+        let response = match request.method() {
+            "hello" => {
+                let message = format!("Hello, {}!", &ctx.message);
+                Some((request, Value::String(message)).into())
+            }
+            _ => None
+        };
         Ok(response)
     }
 }
@@ -26,12 +28,12 @@ impl Service for ServiceHandler {
 fn main() -> Result<()> {
     let service: Box<dyn Service<Data = ServiceData>> =
         Box::new(ServiceHandler {});
-    let mut request = Request::new_reply("hello", None);
+    let request = Request::new_reply("hello", None);
     let server = Server::new(vec![&service]);
     let data = ServiceData {
         message: "world".to_string(),
     };
-    let response = server.serve(&mut request, &data);
+    let response = server.serve(&request, &data);
     println!("{:?}", response.as_ref().unwrap().result());
     assert_eq!(
         Some(Value::String("Hello, world!".to_string())),

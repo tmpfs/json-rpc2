@@ -14,7 +14,7 @@ pub trait Service: Send + Sync {
     /// See [Service](crate::Service) for more information.
     async fn handle(
         &self,
-        request: &mut Request,
+        request: &Request,
         ctx: &Self::Data,
     ) -> Result<Option<Response>>;
 }
@@ -42,7 +42,7 @@ impl<'a, T: Send + Sync> Server<'a, T> {
     /// return `Error::MethodNotFound`.
     pub(crate) async fn handle(
         &self,
-        request: &mut Request,
+        request: &Request,
         ctx: &T,
     ) -> Result<Response> {
         for service in self.services.iter() {
@@ -64,7 +64,7 @@ impl<'a, T: Send + Sync> Server<'a, T> {
     /// If a request was a notification (no id field) this will yield `None`.
     pub async fn serve(
         &self,
-        request: &mut Request,
+        request: &Request,
         ctx: &T,
     ) -> Option<Response> {
         match self.handle(request, ctx).await {

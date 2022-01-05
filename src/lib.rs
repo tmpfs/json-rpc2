@@ -8,23 +8,25 @@
 //! struct ServiceHandler;
 //! impl Service for ServiceHandler {
 //!    type Data = ();
-//!    fn handle(&self, request: &mut Request, _ctx: &Self::Data) -> Result<Option<Response>> {
-//!        let mut response = None;
-//!        if request.matches("hello") {
+//!    fn handle(&self, request: &Request, _ctx: &Self::Data) -> Result<Option<Response>> {
+//!        let response = match request.method() {
+//!          "hello" => {
 //!            let params: String = request.deserialize()?;
 //!            let message = format!("Hello, {}!", params);
-//!            response = Some((request, Value::String(message)).into());
-//!        }
+//!            Some((request, Value::String(message)).into())
+//!          }
+//!          _ => None
+//!        };
 //!        Ok(response)
 //!    }
 //! }
 //!
 //! fn main() -> Result<()> {
 //!    let service: Box<dyn Service<Data = ()>> = Box::new(ServiceHandler {});
-//!    let mut request = Request::new_reply(
+//!    let request = Request::new_reply(
 //!        "hello", Some(Value::String("world".to_string())));
 //!    let server = Server::new(vec![&service]);
-//!    let response = server.serve(&mut request, &());
+//!    let response = server.serve(&request, &());
 //!    assert_eq!(
 //!        Some(Value::String("Hello, world!".to_string())),
 //!        response.unwrap().into());
@@ -130,7 +132,7 @@ impl<'a> Into<(isize, Option<String>)> for &'a Error {
     }
 }
 
-impl<'a> Into<Response> for (&'a mut Request, Error) {
+impl<'a> Into<Response> for (&'a Request, Error) {
     fn into(self) -> Response {
         let (code, data): (isize, Option<String>) = (&self.1).into();
         Response {
@@ -203,7 +205,7 @@ pub trait Service: Send + Sync {
     /// it should return `None`.
     fn handle(
         &self,
-        request: &mut Request,
+        request: &Request,
         ctx: &Self::Data,
     ) -> Result<Option<Response>>;
 }
@@ -229,7 +231,7 @@ impl<'a, T> Server<'a, T> {
     /// return `Error::MethodNotFound`.
     pub(crate) fn handle(
         &self,
-        request: &mut Request,
+        request: &Request,
         ctx: &T,
     ) -> Result<Response> {
         for service in self.services.iter() {
@@ -247,9 +249,7 @@ impl<'a, T> Server<'a, T> {
     }
 
     /// Infallible service handler, errors are automatically converted to responses.
-    ///
-    /// If a request was a notification (no id field) this will yield `None`.
-    pub fn serve(&self, request: &mut Request, ctx: &T) -> Option<Response> {
+    pub fn serve(&self, request: &Request, ctx: &T) -> Option<Response> {
         match self.handle(request, ctx) {
             Ok(response) => {
                 if response.error().is_some() || response.id().is_some() {
@@ -357,6 +357,7 @@ impl Request {
         &self.params
     }
 
+    #[deprecated(note = "Use match expression on method() instead")]
     /// Determine if the given name matches the request method.
     pub fn matches(&self, name: &str) -> bool {
         name == &self.method
@@ -367,9 +368,9 @@ impl Request {
     /// If this request message has no parameters or the `params`
     /// payload cannot be converted to `T` this will return
     /// `Error::InvalidParams`.
-    pub fn deserialize<T: DeserializeOwned>(&mut self) -> Result<T> {
-        if let Some(params) = self.params.take() {
-            Ok(serde_json::from_value::<T>(params).map_err(|e| {
+    pub fn deserialize<T: DeserializeOwned>(&self) -> Result<T> {
+        if let Some(params) = &self.params {
+            Ok(serde_json::from_value::<T>(params.clone()).map_err(|e| {
                 Error::InvalidParams {
                     id: self.id.clone(),
                     data: e.to_string(),
@@ -443,8 +444,8 @@ impl Into<Option<RpcError>> for Response {
     }
 }
 
-impl<'a> From<(&'a mut Request, Value)> for Response {
-    fn from(req: (&'a mut Request, Value)) -> Self {
+impl<'a> From<(&'a Request, Value)> for Response {
+    fn from(req: (&'a Request, Value)) -> Self {
         Self {
             jsonrpc: VERSION.to_string(),
             id: req.0.id.clone(),
@@ -454,8 +455,8 @@ impl<'a> From<(&'a mut Request, Value)> for Response {
     }
 }
 
-impl<'a> From<&'a mut Request> for Response {
-    fn from(req: &'a mut Request) -> Self {
+impl<'a> From<&'a Request> for Response {
+    fn from(req: &'a Request) -> Self {
         Self {
             jsonrpc: VERSION.to_string(),
             result: None,
@@ -490,15 +491,17 @@ mod test {
         type Data = ();
         fn handle(
             &self,
-            request: &mut Request,
+            request: &Request,
             _context: &Self::Data,
         ) -> Result<Option<Response>> {
-            let mut response = None;
-            if request.matches("hello") {
-                let params: String = request.deserialize()?;
-                let message = format!("Hello, {}!", params);
-                response = Some((request, Value::String(message)).into());
-            }
+            let response = match request.method() {
+                "hello" => {
+                    let params: String = request.deserialize()?;
+                    let message = format!("Hello, {}!", params);
+                    Some((request, Value::String(message)).into())
+                }
+                _ => None
+            };
             Ok(response)
         }
     }
@@ -508,7 +511,7 @@ mod test {
         type Data = ();
         fn handle(
             &self,
-            _request: &mut Request,
+            _request: &Request,
             _context: &Self::Data,
         ) -> Result<Option<Response>> {
             // Must Box the error as it is foreign.
@@ -553,7 +556,7 @@ mod test {
     fn jsonrpc_invalid_request_error() -> Result<()> {
         let bad_json = "{}";
         let response: Response = match from_str(bad_json) {
-            Ok(mut request) => (&mut request).into(),
+            Ok(request) => (&request).into(),
             Err(e) => e.into(),
         };
         assert_eq!(
@@ -612,9 +615,9 @@ mod test {
     fn jsonrpc_internal_error() -> Result<()> {
         let service: Box<dyn Service<Data = ()>> =
             Box::new(InternalErrorService {});
-        let mut request = Request::new_reply("foo", None);
+        let request = Request::new_reply("foo", None);
         let server = Server::new(vec![&service]);
-        let response = server.serve(&mut request, &());
+        let response = server.serve(&request, &());
         assert_eq!(
             Some(RpcError {
                 code: -32603,
@@ -630,7 +633,7 @@ mod test {
     fn jsonrpc_parse_error() -> Result<()> {
         let bad_json = r#"{"jsonrpc": "oops}"#;
         let response: Response = match from_str(bad_json) {
-            Ok(mut request) => (&mut request).into(),
+            Ok(request) => (&request).into(),
             Err(e) => e.into(),
         };
         assert_eq!(
