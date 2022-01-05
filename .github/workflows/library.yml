@@ -4,7 +4,6 @@ on: [pull_request]
 
 env:
   RUST_LOG: "0"
-  WORKING_DIRECTORY: ./server
 
 jobs:
   fmt:
@@ -18,7 +17,6 @@ jobs:
           profile: minimal
           components: rustfmt
       - name: Run cargo fmt
-        working-directory: ${{env.WORKING_DIRECTORY}}
         run: cargo fmt --all -- --check
 
   clippy:
@@ -32,7 +30,6 @@ jobs:
           profile: minimal
           components: clippy
       - name: Run cargo clippy
-        working-directory: ${{env.WORKING_DIRECTORY}}
         run: cargo clippy --all
 
   build:
@@ -45,5 +42,4 @@ jobs:
         with:
           profile: minimal
       - name: Run cargo build
-        working-directory: ${{env.WORKING_DIRECTORY}}
         run: cargo build --release
