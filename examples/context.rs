@@ -19,7 +19,7 @@ impl Service for ServiceHandler {
                 let message = format!("Hello, {}!", &ctx.message);
                 Some((request, Value::String(message)).into())
             }
-            _ => None
+            _ => None,
         };
         Ok(response)
     }

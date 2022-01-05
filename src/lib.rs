@@ -1,4 +1,5 @@
 #![deny(missing_docs)]
+#![allow(clippy::borrowed_box)]
 //! Simple, robust and pragmatic facade for JSON-RPC2 services that is transport agnostic.
 //!
 //! ```
@@ -116,9 +117,9 @@ pub enum Error {
     Boxed(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
-impl<'a> Into<(isize, Option<String>)> for &'a Error {
-    fn into(self) -> (isize, Option<String>) {
-        match self {
+impl<'a> From<&'a Error> for (isize, Option<String>) {
+    fn from(error: &'a Error) -> Self {
+        match error {
             Error::MethodNotFound { .. } => (METHOD_NOT_FOUND, None),
             Error::InvalidParams { data, .. } => {
                 (INVALID_PARAMS, Some(data.to_string()))
@@ -128,38 +129,6 @@ impl<'a> Into<(isize, Option<String>)> for &'a Error {
                 (INVALID_REQUEST, Some(data.to_string()))
             }
             _ => (INTERNAL_ERROR, None),
-        }
-    }
-}
-
-impl<'a> Into<Response> for (&'a Request, Error) {
-    fn into(self) -> Response {
-        let (code, data): (isize, Option<String>) = (&self.1).into();
-        Response {
-            jsonrpc: VERSION.to_string(),
-            id: self.0.id.clone(),
-            result: None,
-            error: Some(RpcError {
-                code,
-                message: self.1.to_string(),
-                data,
-            }),
-        }
-    }
-}
-
-impl Into<Response> for Error {
-    fn into(self) -> Response {
-        let (code, data): (isize, Option<String>) = (&self).into();
-        Response {
-            jsonrpc: VERSION.to_string(),
-            id: Some(Value::Null),
-            result: None,
-            error: Some(RpcError {
-                code,
-                message: self.to_string(),
-                data,
-            }),
         }
     }
 }
@@ -265,23 +234,22 @@ impl<'a, T> Server<'a, T> {
 
 /// Parse a JSON payload from a string slice into a request.
 pub fn from_str(payload: &str) -> Result<Request> {
-    Ok(serde_json::from_str::<Request>(payload).map_err(map_json_error)?)
+    serde_json::from_str::<Request>(payload).map_err(map_json_error)
 }
 
 /// Parse a JSON payload from a [Value](serde_json::Value) into a request.
 pub fn from_value(payload: Value) -> Result<Request> {
-    Ok(serde_json::from_value::<Request>(payload).map_err(map_json_error)?)
+    serde_json::from_value::<Request>(payload).map_err(map_json_error)
 }
 
 /// Parse a JSON payload from a byte slice into a request.
-pub fn from_slice<'a>(payload: &'a [u8]) -> Result<Request> {
-    Ok(serde_json::from_slice::<Request>(payload).map_err(map_json_error)?)
+pub fn from_slice(payload: &[u8]) -> Result<Request> {
+    serde_json::from_slice::<Request>(payload).map_err(map_json_error)
 }
 
 /// Parse a JSON payload from an IO reader into a request.
 pub fn from_reader<R: std::io::Read>(payload: R) -> Result<Request> {
-    Ok(serde_json::from_reader::<R, Request>(payload)
-        .map_err(map_json_error)?)
+    serde_json::from_reader::<R, Request>(payload).map_err(map_json_error)
 }
 
 /// JSON-RPC request.
@@ -360,7 +328,7 @@ impl Request {
     #[deprecated(note = "Use match expression on method() instead")]
     /// Determine if the given name matches the request method.
     pub fn matches(&self, name: &str) -> bool {
-        name == &self.method
+        *name == self.method
     }
 
     /// Deserialize and consume the message parameters into type `T`.
@@ -426,21 +394,53 @@ impl Response {
     }
 }
 
-impl Into<(Option<Value>, Option<RpcError>, Option<Value>)> for Response {
-    fn into(self) -> (Option<Value>, Option<RpcError>, Option<Value>) {
-        (self.id, self.error, self.result)
+impl From<Response> for (Option<Value>, Option<RpcError>, Option<Value>) {
+    fn from(response: Response) -> Self {
+        (response.id, response.error, response.result)
     }
 }
 
-impl Into<Option<Value>> for Response {
-    fn into(self) -> Option<Value> {
-        self.result
+impl From<Response> for Option<Value> {
+    fn from(response: Response) -> Self {
+        response.result
     }
 }
 
-impl Into<Option<RpcError>> for Response {
-    fn into(self) -> Option<RpcError> {
-        self.error
+impl From<Response> for Option<RpcError> {
+    fn from(response: Response) -> Self {
+        response.error
+    }
+}
+
+impl From<Error> for Response {
+    fn from(error: Error) -> Self {
+        let (code, data): (isize, Option<String>) = (&error).into();
+        Response {
+            jsonrpc: VERSION.to_string(),
+            id: Some(Value::Null),
+            result: None,
+            error: Some(RpcError {
+                code,
+                message: error.to_string(),
+                data,
+            }),
+        }
+    }
+}
+
+impl<'a> From<(&'a Request, Error)> for Response {
+    fn from(result: (&'a Request, Error)) -> Self {
+        let (code, data): (isize, Option<String>) = (&result.1).into();
+        Response {
+            jsonrpc: VERSION.to_string(),
+            id: result.0.id.clone(),
+            result: None,
+            error: Some(RpcError {
+                code,
+                message: result.1.to_string(),
+                data,
+            }),
+        }
     }
 }
 
@@ -500,7 +500,7 @@ mod test {
                     let message = format!("Hello, {}!", params);
                     Some((request, Value::String(message)).into())
                 }
-                _ => None
+                _ => None,
             };
             Ok(response)
         }
