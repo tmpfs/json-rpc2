@@ -62,11 +62,7 @@ impl<'a, T: Send + Sync> Server<'a, T> {
     /// Infallible service handler, errors are automatically converted to responses.
     ///
     /// If a request was a notification (no id field) this will yield `None`.
-    pub async fn serve(
-        &self,
-        request: &Request,
-        ctx: &T,
-    ) -> Option<Response> {
+    pub async fn serve(&self, request: &Request, ctx: &T) -> Option<Response> {
         match self.handle(request, ctx).await {
             Ok(response) => {
                 if response.error().is_some() || response.id().is_some() {

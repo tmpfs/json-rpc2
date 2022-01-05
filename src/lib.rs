@@ -500,7 +500,7 @@ mod test {
                     let message = format!("Hello, {}!", params);
                     Some((request, Value::String(message)).into())
                 }
-                _ => None
+                _ => None,
             };
             Ok(response)
         }
