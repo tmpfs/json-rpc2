@@ -161,6 +161,17 @@ pub struct RpcError {
     pub data: Option<String>,
 }
 
+impl RpcError {
+    /// Create a new JSON-RPC internal error.
+    pub fn new(message: String, data: Option<String>) -> Self {
+        Self {
+            code: INTERNAL_ERROR,
+            message,
+            data,
+        }
+    }
+}
+
 /// Trait for services that maybe handle a request.
 pub trait Service: Send + Sync {
     /// Type of the user data for this service.
@@ -444,6 +455,17 @@ impl<'a> From<(&'a Request, Error)> for Response {
     }
 }
 
+impl<'a> From<(&'a Request, RpcError)> for Response {
+    fn from(result: (&'a Request, RpcError)) -> Self {
+        Response {
+            jsonrpc: VERSION.to_string(),
+            id: result.0.id.clone(),
+            result: None,
+            error: Some(result.1),
+        }
+    }
+}
+
 impl<'a> From<(&'a Request, Value)> for Response {
     fn from(req: (&'a Request, Value)) -> Self {
         Self {
@@ -518,6 +540,20 @@ mod test {
             Err(Error::from(Box::from(MockError::Internal(
                 "Mock error".to_string(),
             ))))
+        }
+    }
+
+    struct InternalRpcErrorService;
+    impl Service for InternalRpcErrorService {
+        type Data = ();
+        fn handle(
+            &self,
+            request: &Request,
+            _context: &Self::Data,
+        ) -> Result<Option<Response>> {
+            let err = RpcError::new("Mock RPC error".to_string(), Some("close-connection".to_string()));
+            let res = Some((request, err).into());
+            Ok(res)
         }
     }
 
@@ -646,6 +682,25 @@ mod test {
                 )
             }),
             response.into()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn jsonrpc_internal_rpc_error() -> Result<()> {
+    
+        let service: Box<dyn Service<Data = ()>> =
+            Box::new(InternalRpcErrorService {});
+        let request = Request::new_reply("foo", None);
+        let server = Server::new(vec![&service]);
+        let response = server.serve(&request, &());
+        assert_eq!(
+            Some(RpcError {
+                code: -32603,
+                message: "Mock RPC error".to_string(),
+                data: Some("close-connection".to_string())
+            }),
+            response.unwrap().into()
         );
         Ok(())
     }
