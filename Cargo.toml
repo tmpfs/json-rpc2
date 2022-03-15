@@ -18,7 +18,7 @@ async-trait = { version = "0.1", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
-# Hack so we don't have to enabled features for `cargo test`
+# Hack so we don't have to enable features for `cargo test`
 # See: https://github.com/rust-lang/cargo/issues/2911
 json-rpc2 = { path = ".", features = ["async"] }
 
