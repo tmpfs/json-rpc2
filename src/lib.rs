@@ -62,7 +62,7 @@
 pub mod futures;
 
 use rand::Rng;
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::{Number, Value};
 
 const VERSION: &str = "2.0";
@@ -298,7 +298,7 @@ impl Request {
             method: method.to_string(),
             params,
             id: Some(Value::Number(Number::from(
-                rand::thread_rng().gen_range(1..std::u32::MAX),
+                rand::thread_rng().gen_range(1..u32::MAX),
             ))),
         }
     }
@@ -551,7 +551,10 @@ mod test {
             request: &Request,
             _context: &Self::Data,
         ) -> Result<Option<Response>> {
-            let err = RpcError::new("Mock RPC error".to_string(), Some("close-connection".to_string()));
+            let err = RpcError::new(
+                "Mock RPC error".to_string(),
+                Some("close-connection".to_string()),
+            );
             let res = Some((request, err).into());
             Ok(res)
         }
@@ -561,12 +564,12 @@ mod test {
     fn jsonrpc_service_ok() -> Result<()> {
         let service: Box<dyn Service<Data = ()>> =
             Box::new(HelloServiceHandler {});
-        let mut request = Request::new_reply(
+        let request = Request::new_reply(
             "hello",
             Some(Value::String("world".to_string())),
         );
         let server = Server::new(vec![&service]);
-        let response = server.serve(&mut request, &());
+        let response = server.serve(&request, &());
         assert_eq!(
             Some(Value::String("Hello, world!".to_string())),
             response.unwrap().into()
@@ -578,12 +581,12 @@ mod test {
     fn jsonrpc_service_notification() -> Result<()> {
         let service: Box<dyn Service<Data = ()>> =
             Box::new(HelloServiceHandler {});
-        let mut request = Request::new_notification(
+        let request = Request::new_notification(
             "hello",
             Some(Value::String("world".to_string())),
         );
         let server = Server::new(vec![&service]);
-        let response = server.serve(&mut request, &());
+        let response = server.serve(&request, &());
         assert_eq!(None, response);
         Ok(())
     }
@@ -612,9 +615,9 @@ mod test {
     fn jsonrpc_service_method_not_found() -> Result<()> {
         let service: Box<dyn Service<Data = ()>> =
             Box::new(HelloServiceHandler {});
-        let mut request = Request::new_reply("non-existent", None);
+        let request = Request::new_reply("non-existent", None);
         let server = Server::new(vec![&service]);
-        let response = server.serve(&mut request, &());
+        let response = server.serve(&request, &());
         assert_eq!(
             Some(RpcError {
                 code: -32601,
@@ -630,9 +633,9 @@ mod test {
     fn jsonrpc_invalid_params() -> Result<()> {
         let service: Box<dyn Service<Data = ()>> =
             Box::new(HelloServiceHandler {});
-        let mut request = Request::new_reply("hello", Some(Value::Bool(true)));
+        let request = Request::new_reply("hello", Some(Value::Bool(true)));
         let server = Server::new(vec![&service]);
-        let response = server.serve(&mut request, &());
+        let response = server.serve(&request, &());
         assert_eq!(
             Some(RpcError {
                 code: -32602,
@@ -688,7 +691,6 @@ mod test {
 
     #[test]
     fn jsonrpc_internal_rpc_error() -> Result<()> {
-    
         let service: Box<dyn Service<Data = ()>> =
             Box::new(InternalRpcErrorService {});
         let request = Request::new_reply("foo", None);
