@@ -2,7 +2,7 @@
 name = "json-rpc2"
 version = "0.11.1"
 authors = ["muji <muji@tmpfs.org>"]
-edition = "2018"
+edition = "2024"
 description = "Simple, robust and pragmatic JSON-RPC 2.0 implementation"
 keywords = ["JSON", "RPC", "JSON-RPC"]
 repository = "https://github.com/tmpfs/json-rpc2"
